@@ -403,6 +403,7 @@
     if (a.reg.cost > 0) out.push({ k: a.reg.roas != null && a.reg.roas >= 1 ? 'info' : 'bad', t: 'Chiến dịch thường (ngoài GMV Max): chi ' + money(a.reg.cost) + ', doanh thu shop ghi nhận ' + money(a.reg.rev) + ' → ROAS ' + (a.reg.roas == null ? M.UNDEF : M.fmtNum(a.reg.roas, 2)) + '. Cần xác định mục tiêu của nhóm này (tăng nhận diện, kéo người xem LIVE) trước khi tiếp tục chi.' });
     if (a.ch && ctx.shop.gmv > 0) out.push({ k: 'info', t: 'Doanh số theo kênh: LIVE ' + M.fmtPct(a.ch.live / ctx.shop.gmv, 1) + ', video ' + M.fmtPct(a.ch.video / ctx.shop.gmv, 1) + ', thẻ sản phẩm ' + M.fmtPct(a.ch.card / ctx.shop.gmv, 1) + '; nhà sáng tạo mang lại ' + M.fmtPct(a.ch.creator / ctx.shop.gmv, 1) + ' GMV.' });
     if (a.costToGmv != null) out.push({ k: 'info', t: 'Chi phí quảng cáo bằng ' + M.fmtPct(a.costToGmv, 1) + ' GMV toàn shop' + (a.sameCostShop ? '' : ' (hai nguồn khác kỳ: chi phí ' + cov(a.costFileCov) + ', GMV ' + cov(ctx.shop.coverage) + ' – chỉ để tham khảo)') + '.' });
+    if (a.trend && a.trend.first != null && a.trend.last != null) out.push({ k: a.trend.last > a.trend.first * 1.1 ? 'bad' : a.trend.last < a.trend.first * 0.9 ? 'good' : 'info', t: 'Chi phí quảng cáo bằng ' + M.fmtPct(a.trend.first, 1) + ' GMV trong 3 tháng đầu kỳ và ' + M.fmtPct(a.trend.last, 1) + ' trong 3 tháng gần nhất' + (a.trend.last > a.trend.first * 1.1 ? ' → mỗi đồng doanh số đang tốn nhiều tiền quảng cáo hơn trước.' : a.trend.last < a.trend.first * 0.9 ? ' → hiệu quả quảng cáo đang cải thiện.' : ' → tương đối ổn định.') });
     if (!a.booking.n) out.push({ k: 'warn', t: 'Chưa có danh sách booking nhà sáng tạo trong kỳ → chưa tính được chi phí và hiệu quả booking.' });
     if (a.market.length) { var m = a.market[0]; out.push({ k: 'info', t: 'Thị trường (ghi nhận ' + M.fmtDate(m.date) + '): hạng ' + m.rank + ' về GMV trong nhóm ngành' + (m.change ? ' (' + m.change + ')' : '') + (m.ace ? '; chỉ số ACE: ' + m.ace : '') + '.' }); }
     return '<ul class="comments">' + out.map(function (c) { var ic = c.k === 'good' ? '▲' : c.k === 'bad' ? '▼' : c.k === 'warn' ? '!' : 'i'; return '<li class="cm-' + c.k + '"><span class="cm-ic" aria-hidden="true">' + ic + '</span><span>' + esc(c.t) + '</span></li>'; }).join('') + '</ul>';
@@ -418,6 +419,14 @@
       tile('Chi phí QC / GMV toàn shop', a.costToGmv == null ? M.NODATA : M.fmtPct(a.costToGmv, 1), a.costToGmv == null ? '' : (a.sameCostShop ? 'Cùng kỳ' : 'Khác kỳ – tham khảo')) +
       tile('Booking nhà sáng tạo', a.booking.n ? money(a.booking.fee) : M.NODATA, a.booking.n ? a.booking.n + ' lần booking' : 'Cần danh sách booking nội bộ') + '</div>';
     h += '<h3>Nhận định</h3>' + adsControlNotes(ctx);
+
+    if (a.byMonth.length > 1) {
+      var ym = function (m) { return 'T' + (+m.slice(5, 7)) + '/' + m.slice(0, 4); };
+      h += '<h3>Chi phí quảng cáo so với doanh số theo tháng</h3><div class="chart" data-chart="acmon"></div>';
+      h += tbl(['Tháng', { t: 'Chi phí QC (Business Center)', num: true }, { t: 'GMV toàn shop', num: true }, { t: 'Chi phí QC / GMV', num: true }, { t: 'Hoa hồng liên kết ước tính', num: true }, { t: 'Chiến dịch thường: chi', num: true }, { t: 'Chiến dịch thường: doanh thu', num: true }],
+        a.byMonth.map(function (m) { return [ym(m.month) + partialTag(m.costPartial), m.cost == null ? '—' : money(m.cost), m.gmvDays ? money(m.gmv) + (m.gmvDays < 28 ? ' <span class="muted small">(' + m.gmvDays + ' ngày)</span>' : '') : '—', m.costToGmv == null ? '—' : M.fmtPct(m.costToGmv, 1), m.aff == null ? '—' : money(m.aff), m.regCost ? money(m.regCost) : '—', m.regCost ? money(m.regRev) : '—']; }));
+      h += src('Chi phí QC theo file Cost từng tháng; GMV theo Phân tích shop; hoa hồng theo file Liên kết (chỉ có từ tháng 3 – TikTok giữ 269 ngày). Tỷ lệ chỉ tính khi cả hai nguồn có số của tháng; tháng chưa trọn chỉ để tham khảo.');
+    }
 
     h += '<h3>A. Đối chiếu chi phí quảng cáo theo tài khoản</h3>';
     if (!a.byAccount.length) h += nodata('Chưa có file Cost hoặc báo cáo chiến dịch trong kỳ lọc.');
@@ -473,6 +482,11 @@
       h += src('Nguồn: Seller Center → Số liệu phân tích (Bảng xếp hạng GMV theo ngày; ACE = Danh mục sản phẩm, Nội dung, Tiếp cận). TikTok không công bố GMV của shop khác.');
     }
     host.innerHTML = h;
+    var me = host.querySelector('[data-chart="acmon"]'), mr = a.byMonth.filter(function (m) { return m.costToGmv != null; });
+    if (me && mr.length) C.columns(me, { name: 'Chi phí QC / GMV', x: mr.map(function (m) { return m.month; }), values: mr.map(function (m) { return m.costToGmv * 100; }), color: SERIES[0], height: 200,
+      xFmt: function (m) { return 'T' + (+m.slice(5, 7)); }, yFmt: function (v) { return M.fmtNum(v, 0) + '%'; }, tipFmt: function (v) { return M.fmtNum(v, 1) + '%'; }, tipTitle: function (m) { return 'Tháng ' + (+m.slice(5, 7)) + '/' + m.slice(0, 4); },
+      flags: mr.map(function (m) { return m.costPartial || m.gmvDays < 28; }),
+      extra: function (i) { var m = mr[i]; return [{ name: 'chi phí QC', value: money(m.cost) }, { name: 'GMV', value: money(m.gmv) }]; } });
     var se = host.querySelector('[data-chart="acseg"]');
     if (se && sp.gmv > 0) C.segbar(se, { title: 'Cơ cấu GMV theo kênh', fmt: money, pct: function (x) { return M.fmtPct(x, 1); },
       parts: sp.channels.map(function (c) { return { label: c.label, value: c.value, color: SERIES[c.slot], ink: SERIES_INK[c.slot] }; }) });

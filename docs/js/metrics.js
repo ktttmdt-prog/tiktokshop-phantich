@@ -348,6 +348,19 @@
       byCreator: Object.keys(bc).map(function (k) { var a = bc[k]; a.roi = a.gmvRows ? M.roas(a.fee, a.gmv) : null; return a; }).sort(function (x, y) { return y.fee - x.fee; }) };
     o.booking.roi = o.booking.gmvRows ? M.roas(o.booking.fee, o.booking.gmv) : null;
     o.market = (cube.market || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    // xu hướng theo tháng: chi phí QC (file Cost), GMV toàn shop, hoa hồng liên kết, chiến dịch thường
+    var mon = {}, M0 = function (k) { return mon[k] || (mon[k] = { month: k, cost: null, costPartial: false, gmv: 0, gmvDays: 0, aff: null, regCost: 0, regRev: 0, gmvMaxCost: 0, gmvMaxRev: 0 }); };
+    rec.acct.rows.forEach(function (r) { if (r.from.slice(0, 7) !== r.to.slice(0, 7)) return; var a = M0(r.from.slice(0, 7)); a.cost = (a.cost || 0) + (r.amount || 0); if (r.partial) a.costPartial = true; });
+    (cube._shop || []).filter(byShop(f)).filter(function (r) { return r.date >= f.from && r.date <= f.to; }).forEach(function (r) { var a = M0(r.date.slice(0, 7)); a.gmv += r.gmv || 0; a.gmvDays++; });
+    aff.rows.forEach(function (r) { if (r.from.slice(0, 7) !== r.to.slice(0, 7)) return; var a = M0(r.from.slice(0, 7)); a.aff = (a.aff || 0) + (r.commission || 0); });
+    rows.forEach(function (r) { if (r.from !== r.to) return; var a = M0(r.from.slice(0, 7)); if (M.isGmvMax(r)) { a.gmvMaxCost += r.cost || 0; a.gmvMaxRev += r.rev || 0; } else { a.regCost += r.cost || 0; a.regRev += r.rev || 0; } });
+    o.byMonth = Object.keys(mon).sort().map(function (k) { var a = mon[k]; a.costToGmv = a.cost != null && a.gmv > 0 ? a.cost / a.gmv : null; a.regRoas = M.roas(a.regCost, a.regRev); return a; });
+    var withRatio = o.byMonth.filter(function (a) { return a.costToGmv != null; });
+    if (withRatio.length >= 4) {
+      var head = withRatio.slice(0, 3), tail = withRatio.slice(-3);
+      var avg = function (l) { var c = 0, g = 0; l.forEach(function (a) { c += a.cost; g += a.gmv; }); return g > 0 ? c / g : null; };
+      o.trend = { first: avg(head), last: avg(tail), firstLabel: head[0].month + '→' + head[head.length - 1].month, lastLabel: tail[0].month + '→' + tail[tail.length - 1].month };
+    }
     return o;
   };
 
