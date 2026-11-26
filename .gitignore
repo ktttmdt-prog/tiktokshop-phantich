@@ -1,0 +1,14 @@
+# Không đưa dữ liệu kinh doanh lên kho mã nguồn
+*.xlsx
+*.xlsm
+*.xls
+*.ttsbak
+*.ttsgoi
+*.ttsbc
+BaoCao*.html
+GoiDuLieu*
+SaoLuu*
+samples/
+
+# Kiểm thử với file mẫu thật (có số liệu và thông tin thật) – chỉ giữ trên máy
+tests/e2e.html

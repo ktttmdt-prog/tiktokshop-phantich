@@ -1,0 +1,4 @@
+Order/adjustment ID,Type,Order created time,Order settled time,Currency,Total settlement amount,Total revenue,Total fees
+580000000000000001,Order,2026/11/01 10:00:00,2026/11/10 08:00:00,VND,270000,300000,-30000
+580000000000000003,Order,2026/11/02 09:00:00,2026/11/11 08:00:00,VND,135000,150000,-15000
+ADJ-0001,Adjustment,,2026/11/12 08:00:00,VND,-5000,,

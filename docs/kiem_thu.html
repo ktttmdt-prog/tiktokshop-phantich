@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiểm thử công thức – Phân tích TikTok Shop</title>
+<link rel="stylesheet" href="app.css">
+<style>.pass{color:var(--good-text);font-weight:700}.fail{color:var(--bad-text);font-weight:700}</style>
+</head>
+<body>
+<header class="top"><div class="brand"><span class="logo">◆</span><div><div class="app-title">Kiểm thử công thức</div><div class="lan">Chạy hoàn toàn trên trình duyệt, không cần mạng. So sánh kết quả của bộ tính toán với kết quả mong đợi.</div></div></div></header>
+<main><div id="sum"></div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>Tình huống</th><th>Chỉ tiêu</th><th>Mong đợi</th><th>Thực tế</th><th>Kết quả</th></tr></thead><tbody id="out"></tbody></table></div></main>
+<script src="js/metrics.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/views.js"></script>
+<script>
+(function () {
+  var M = TTSM, rows = [], n = 0, fails = 0;
+  function check(group, what, expected, actual) {
+    var ok = String(expected) === String(actual); n++; if (!ok) fails++;
+    rows.push('<tr><td>' + n + '</td><td>' + group + '</td><td>' + what + '</td><td>' + expected + '</td><td>' + actual + '</td><td class="' + (ok ? 'pass">ĐẠT' : 'fail">SAI') + '</td></tr>');
+  }
+  var cost = 271644368, rev = 2957705618, sku = 24045, th = [12, 13];
+  var G = 'Nghiệm thu: chi phí 271.644.368 · doanh thu gộp 2.957.705.618 · 24.045 đơn SKU';
+  check(G, 'ROAS', '10,89', M.fmtRoas(M.roas(cost, rev), th));
+  check(G, 'CIR', '9,18%', M.fmtPct(M.cir(cost, rev)));
+  check(G, 'Chi phí/đơn SKU (làm tròn)', '11.297', M.fmtNum(M.cpo(cost, sku), 0));
+  check(G, 'Doanh thu còn thiếu để đạt ROAS 12', '302.026.798', M.fmtNum(M.shortfall(12, cost, rev)));
+  check(G, 'Doanh thu còn thiếu để đạt ROAS 13', '573.671.166', M.fmtNum(M.shortfall(13, cost, rev)));
+  check(G, 'Trạng thái', 'Dưới 12', M.band(M.roas(cost, rev), th).label);
+
+  // Gộp nhiều ngày / shop / chiến dịch → tính lại từ số tổng (không lấy trung bình ROAS)
+  var parts = [
+    ['S1', '2026-11-01', 'c:A', 'A', 90000000, 1100000000, 8000], ['S1', '2026-11-02', 'c:A', 'A', 60000000, 500000000, 5000],
+    ['S2', '2026-11-01', 'c:B', 'B', 71644368, 857705618, 6045], ['S2', '2026-11-02', 'c:C', 'C', 50000000, 500000000, 5000]
+  ];
+  var cube = M.prepare({ shops: [{ id: 'S1', name: 'Shop 1' }, { id: 'S2', name: 'Shop 2' }], thresholds: [12, 13], official: null,
+    ads: { cols: ['shop', 'from', 'to', 'ent', 'name', 'cost', 'rev', 'sku', 'partial', 'imp', 'roiFile'], rows: parts.map(function (p) { return [p[0], p[1], p[1], p[2], p[3], p[4], p[5], p[6], 0, 1, null]; }) },
+    acct: { cols: [], rows: [] }, topup: { cols: [], rows: [] }, inv: { cols: [], rows: [] }, ord: { cols: [], rows: [] }, stl: { cols: [], rows: [] }, vid: { cols: [], rows: [] }, aff: { cols: [], rows: [] }, imports: [] });
+  var f = { from: '2026-11-01', to: '2026-11-30', shop: '', ent: '' };
+  var s = M.ads(cube, f);
+  var G2 = 'Gộp 2 shop × 3 chiến dịch × 2 ngày (cùng tổng như nghiệm thu)';
+  check(G2, 'Tổng chi phí', '271.644.368', M.fmtNum(s.cost));
+  check(G2, 'Tổng doanh thu gộp', '2.957.705.618', M.fmtNum(s.rev));
+  check(G2, 'Tổng đơn SKU', '24.045', M.fmtNum(s.sku));
+  check(G2, 'ROAS gộp (từ số tổng)', '10,89', M.fmtRoas(s.roas, th));
+  var avg = s.byShop.reduce(function (a, b) { return a + b.roas; }, 0) / s.byShop.length;
+  check(G2, 'ROAS gộp KHÁC trung bình ROAS từng shop', 'true', String(M.fmtRoas(avg, th) !== M.fmtRoas(s.roas, th)));
+  check(G2, 'Chi phí/đơn SKU', '11.297', M.fmtNum(s.cpo, 0));
+  var t = M.targets(s, th, null, 0);
+  check(G2, 'Thiếu để đạt 12', '302.026.798', M.fmtNum(t[0].shortfall));
+  check(G2, 'Thiếu để đạt 13', '573.671.166', M.fmtNum(t[1].shortfall));
+  var rk = M.ranking(s, th, 0);
+  check(G2, 'Chiến dịch dưới 12 xếp đầu (thiếu nhiều nhất)', 'A', rk[0] && rk[0].name);
+  check(G2, 'Số thiếu của A so với 12 = 12×150.000.000 − 1.600.000.000', '200.000.000', M.fmtNum(rk[0].short[0]));
+  check(G2, 'Ngày 01/11 ROAS = (1.100.000.000+857.705.618)/(90.000.000+71.644.368)', M.fmtRoas((1100000000 + 857705618) / (90000000 + 71644368), th), M.fmtRoas(s.byDay[0].roas, th));
+
+  // Chi phí bằng 0
+  var G3 = 'Chi phí Ads bằng 0';
+  check(G3, 'ROAS', 'Không xác định', M.fmtRoas(M.roas(0, 5000000), th));
+  check(G3, 'CIR (doanh thu > 0)', '0,00%', M.fmtPct(M.cir(0, 5000000)));
+  check(G3, 'Doanh thu còn thiếu', 'null', String(M.shortfall(12, 0, 5000000)));
+  check(G3, 'Trạng thái', 'Không xác định', M.band(M.roas(0, 5000000), th).label);
+  check(G3, 'CIR khi doanh thu = 0', 'Không xác định', M.fmtPct(M.cir(1000, 0)));
+  check(G3, 'Chi phí/đơn SKU khi 0 đơn', 'null', String(M.cpo(1000, 0)));
+  var cube0 = M.prepare({ shops: [{ id: 'S9', name: 'Shop 0đ' }], thresholds: [12, 13], ads: { cols: cube.ads.cols, rows: [['S9', '2026-11-05', '2026-11-05', '', '(Toàn shop)', 0, 0, 0, 0, 1, null]] }, acct: { cols: [], rows: [] }, topup: { cols: [], rows: [] }, inv: { cols: [], rows: [] }, ord: { cols: [], rows: [] }, stl: { cols: [], rows: [] }, vid: { cols: [], rows: [] }, aff: { cols: [], rows: [] }, imports: [] });
+  var ctx0 = TTSV.compute(cube0, { from: '2026-11-01', to: '2026-11-30', shop: '', ent: '' }, {});
+  check(G3, 'Nhận xét tự động nêu “Không xác định”', 'true', String(ctx0.comments.some(function (c) { return c.t.indexOf('Không xác định') >= 0; })));
+
+  // Ba trạng thái theo mốc 12 / 13
+  var G4 = 'Ba trạng thái mốc 12 và 13';
+  check(G4, 'ROAS 11,99', 'Dưới 12', M.band(11.99, th).label);
+  check(G4, 'ROAS 12,00', 'Từ 12 đến dưới 13', M.band(12, th).label);
+  check(G4, 'ROAS 12,99', 'Từ 12 đến dưới 13', M.band(12.99, th).label);
+  check(G4, 'ROAS 13,00', 'Từ 13 trở lên', M.band(13, th).label);
+  check(G4, 'ROAS 11,996 không hiện thành “12,00”', '11,996', M.fmtRoas(11.996, th));
+  check(G4, 'Chưa chọn mốc chính thức → không kết luận thưởng', 'true', String(TTSV.compute(cube, f, {}).comments.some(function (c) { return c.t.indexOf('KHÔNG kết luận') >= 0; })));
+
+  // Ngân sách còn chi
+  var G5 = 'ROAS cần đạt trên khoản chi còn lại';
+  check(G5, 'Chi 100tr, DT 1.000tr, mốc 12, còn chi 50tr → (12×150 − 1.000)/50', '16,00', M.fmtNum(M.requiredRoas(12, 100e6, 1000e6, 50e6), 2));
+  check(G5, 'Đã vượt mốc → 0', '0', String(M.requiredRoas(12, 100e6, 2000e6, 50e6)));
+  check(G5, 'Ngân sách còn chi = 0 → Không xác định', 'null', String(M.requiredRoas(12, 100e6, 1000e6, 0)));
+  var rq = M.requiredRoas(12, cost, rev, 100000000);
+  check(G5, 'Nghiệm thu + chi thêm 100tr: (12×371.644.368 − 2.957.705.618)/100.000.000', '15,02', M.fmtNum(rq, 2));
+
+  // Số liệu cấp kỳ chỉ trùng một phần với kỳ lọc → không tính, không tự phân bổ
+  var G6 = 'Kỳ chồng lấn một phần (số liệu cấp kỳ)';
+  var cubeP = M.prepare({ shops: [{ id: 'S1', name: 'Shop 1' }], thresholds: [12, 13], ads: { cols: cube.ads.cols, rows: [['S1', '2026-11-01', '2026-11-30', 'c:A', 'A', 100, 1500, 10, 0, 1, null]] }, acct: { cols: [], rows: [] }, topup: { cols: [], rows: [] }, inv: { cols: [], rows: [] }, ord: { cols: [], rows: [] }, stl: { cols: [], rows: [] }, vid: { cols: [], rows: [] }, aff: { cols: [], rows: [] }, imports: [] });
+  var sp = M.ads(cubeP, { from: '2026-11-01', to: '2026-11-15', shop: '', ent: '' });
+  check(G6, 'Lọc 01–15/11 với file cả tháng: số dòng được tính', '0', String(sp.n));
+  check(G6, 'Số dòng bị loại (không chia nhỏ)', '1', String(sp.excluded.length));
+  var sp2 = M.ads(cubeP, { from: '2026-11-01', to: '2026-11-30', shop: '', ent: '' });
+  check(G6, 'Lọc trọn tháng: ROAS', '15,00', M.fmtRoas(sp2.roas, th));
+
+  // Định dạng
+  var G7 = 'Định dạng số kiểu Việt Nam';
+  check(G7, 'Tiền', '2.957.705.618 đ', M.fmtMoney(2957705618));
+  check(G7, 'Làm tròn nửa lên', '11.298', M.fmtNum(11297.5, 0));
+  check(G7, 'Số âm', '-1.234', M.fmtNum(-1234, 0));
+
+  document.getElementById('out').innerHTML = rows.join('');
+  document.getElementById('sum').innerHTML = '<h2 class="' + (fails ? 'fail' : 'pass') + '">' + (fails ? fails + ' / ' + n + ' kiểm tra SAI' : 'Tất cả ' + n + ' kiểm tra ĐẠT') + '</h2>';
+  window.TEST_RESULT = { total: n, fails: fails };
+})();
+</script>
+</body>
+</html>
