@@ -68,7 +68,7 @@
       f('pay_method', 'Phương thức thanh toán (chỉ loại, không lưu số thẻ)', 'Text', [])] });
 
   ds({ key: 'invoice', label: 'Chi tiết hóa đơn TikTok (Ads / phí sàn / hoa hồng)', source: 'TikTok Shop / TikTok Ads → Hóa đơn → Tải chi tiết (invoice_<số>_detail.xlsx)',
-    desc: 'Tiền hóa đơn, thuế suất, tiền thuế, tiền trước thuế. Tên/MST/địa chỉ nhà sáng tạo không được lưu.', signature: ['invoice_no', 'amount'], keyFields: ['invoice_no', 'bill_id', 'order_id'], noPeriodKey: true,
+    desc: 'Tiền hóa đơn, thuế suất, tiền thuế, tiền trước thuế. Tên/MST/địa chỉ nhà sáng tạo không được lưu.', signature: ['invoice_no', 'amount'], keyFields: ['invoice_no', 'bill_id', 'order_id', 'expense_type'], allowDupKey: true, noPeriodKey: true,
     fields: [f('invoice_no', 'Số hóa đơn / mã hồ sơ', 'Text', ['invoice application number', 'invoice number', 'invoice no', 'so hoa don', 'ma hoa don', 'ky hieu so hoa don'], { req: 1 }),
       f('bill_id', 'Bill ID', 'Text', ['bill id', 'ma bill']), f('tax_type', 'Loại thuế', 'Text', ['tax type', 'loai thue']), f('order_id', 'Order ID (hóa đơn)', 'Text', ['order id', 'ma don']),
       f('description', 'Diễn giải', 'Text', ['invoice description', 'mo ta hoa don', 'noi dung', 'dien giai', 'description']), f('expense_type', 'Loại chi phí', 'Text', ['expense type', 'loai chi phi']),
