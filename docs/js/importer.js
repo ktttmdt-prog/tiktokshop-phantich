@@ -5,7 +5,7 @@
   var TOTAL_SET = { 'tong': 1, 'tong cong': 1, 'total': 1, 'grand total': 1, 'cong': 1, 'sum': 1, 'tong so': 1, 'tat ca': 1 };
   // nhận cả dạng “Tổng 239 kết quả” / “Total 12 results” (báo cáo tùy chỉnh của Ads Manager)
   var TOTAL = new Proxy(TOTAL_SET, { get: function (t, k) { return typeof k === 'string' && (t[k] || /^(tong|total)( cong)? \d+ (ket qua|results?|dong|rows?)$/.test(k)) ? 1 : undefined; } });
-  var COVERAGE = { ads_campaign: 1, ads_account_cost: 1, affiliate_period: 1, video_daily: 1, shop_daily: 1 };
+  var COVERAGE = { ads_campaign: 1, ads_account_cost: 1, affiliate_period: 1, video_daily: 1, shop_daily: 1, settlement_report: 1 };
   var uploads = {}, pendings = {};
   function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
@@ -81,14 +81,31 @@
   };
 
   /* req: {uploadId, shopId, newShop, scope, from, to, sheet, dataset, headerRow, mapping, saveTemplate, category} */
-  I.preview = function (req) {
-    var up = uploads[req.uploadId]; if (!up) throw new Error('Phiên tải file đã hết hạn. Vui lòng chọn lại file.');
-    var notes = [], warns = [], forceDs = req.dataset || null, ds = null, headerRow = -1, map = null, sheetIdx = req.sheet != null ? req.sheet : -1;
+  function pickSheet(up, req) {
+    var sheetIdx = req.sheet != null ? req.sheet : -1;
     if (sheetIdx < 0 || sheetIdx >= up.sheets.length) {
       var bsc = -1;
-      up.sheets.forEach(function (s, i) { var d = detect(s, forceDs), sc = d ? 1000 + Object.keys(d.map).length : 0; if (sc > bsc) { bsc = sc; sheetIdx = i; } });
+      up.sheets.forEach(function (s, i) { var d = detect(s, req.dataset || null), sc = d ? 1000 + (d.ds.prefer || 0) + Object.keys(d.map).length : 0; if (sc > bsc) { bsc = sc; sheetIdx = i; } });
     }
+    return sheetIdx;
+  }
+  /* Sheet rất lớn mới đọc phần đầu: trước khi xem trước, đọc nốt toàn bộ nhưng chỉ giữ các cột được ánh xạ (bỏ cột không dùng / thông tin cá nhân). */
+  I.ready = function (req) {
+    var up = uploads[req.uploadId]; if (!up) return Promise.reject(new Error('Phiên tải file đã hết hạn. Vui lòng chọn lại file.'));
+    var sh = up.sheets[pickSheet(up, req)];
+    if (!sh || !sh.load) return Promise.resolve();
+    var keep = {}, any = false, d = detect(sh, req.dataset || null);
+    if (d) Object.keys(d.map).forEach(function (c) { if (!d.ds.F[d.map[c]].pii) { keep[c] = 1; any = true; } });
+    if (req.mapping) Object.keys(req.mapping).forEach(function (c) { if (req.mapping[c]) { keep[c] = 1; any = true; } });
+    if (!sh.lazy && (!sh.kept || (any && Object.keys(keep).every(function (c) { return sh.kept[c]; })))) return Promise.resolve();
+    return sh.load(any ? keep : null);
+  };
+  I.preview = function (req) {
+    var up = uploads[req.uploadId]; if (!up) throw new Error('Phiên tải file đã hết hạn. Vui lòng chọn lại file.');
+    var notes = [], warns = [], forceDs = req.dataset || null, ds = null, headerRow = -1, map = null, sheetIdx = pickSheet(up, req);
     var sh = up.sheets[sheetIdx];
+    if (sh.lazy) throw new Error('Sheet “' + sh.name + '” rất lớn, chưa đọc xong. Vui lòng xem trước lại.');
+    if (sh.kept) notes.push('File lớn (' + Math.round(sh.bytes / 1048576) + ' MB dữ liệu sau giải nén): chỉ đọc các cột được ánh xạ, các cột khác không đọc vào bộ nhớ.');
     if (req.mapping) {
       ds = SC.get(forceDs); if (!ds) throw new Error('Ánh xạ thủ công cần chọn loại dữ liệu.');
       headerRow = req.headerRow || 0; map = {};

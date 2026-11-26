@@ -126,16 +126,24 @@
       if (dv.getUint32(off, true) !== 0x02014b50) break;
       var method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true), nl = dv.getUint16(off + 28, true), xl = dv.getUint16(off + 30, true), cl = dv.getUint16(off + 32, true), lho = dv.getUint32(off + 42, true);
       var name = td.decode(u8.subarray(off + 46, off + 46 + nl)).replace(/\\/g, '/').replace(/^\//, '');
-      entries[name.toLowerCase()] = { name: name, method: method, csize: csize, lho: lho };
+      entries[name.toLowerCase()] = { name: name, method: method, csize: csize, usize: dv.getUint32(off + 24, true), lho: lho };
       off += 46 + nl + xl + cl;
     }
+    function entry(p) { return entries[p.replace(/^\//, '').toLowerCase()] || null; }
+    function raw(en) { var lnl = dv.getUint16(en.lho + 26, true), lxl = dv.getUint16(en.lho + 28, true), start = en.lho + 30 + lnl + lxl; return u8.subarray(start, start + en.csize); }
     return {
-      has: function (p) { return !!entries[p.replace(/^\//, '').toLowerCase()]; },
+      has: function (p) { return !!entry(p); },
+      size: function (p) { var en = entry(p); return en ? en.usize : 0; },
       read: function (p) {
-        var en = entries[p.replace(/^\//, '').toLowerCase()]; if (!en) return Promise.resolve(null);
-        var lnl = dv.getUint16(en.lho + 26, true), lxl = dv.getUint16(en.lho + 28, true), start = en.lho + 30 + lnl + lxl;
-        var data = u8.subarray(start, start + en.csize);
+        var en = entry(p); if (!en) return Promise.resolve(null);
+        var data = raw(en);
         return (en.method === 8 ? K.inflateRaw(data) : Promise.resolve(data.slice())).then(function (b) { return td.decode(b); });
+      },
+      // luồng byte đã giải nén – dùng cho sheet rất lớn (không giữ cả chuỗi XML trong bộ nhớ)
+      stream: function (p) {
+        var en = entry(p); if (!en) return null;
+        var s = new Blob([raw(en)]).stream();
+        return en.method === 8 ? s.pipeThrough(new DecompressionStream('deflate-raw')) : s;
       }
     };
   };
@@ -184,16 +192,118 @@
   }
   function colIndex(ref) { var c = 0, any = false; for (var i = 0; i < ref.length; i++) { var ch = ref.charCodeAt(i); if (ch >= 65 && ch <= 90) { c = c * 26 + ch - 64; any = true; } else if (ch >= 97 && ch <= 122) { c = c * 26 + ch - 96; any = true; } else break; } return any ? c - 1 : -1; }
 
+  K.BIG_XML = 24 * 1024 * 1024; // sheet / bảng chuỗi lớn hơn mức này (sau giải nén) được đọc theo luồng
+  K.HEAD_ROWS = 60;              // sheet lớn: đọc trước bấy nhiêu dòng để nhận dạng, phần còn lại đọc khi nhập
+  var ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+  function unesc(s) {
+    return s.indexOf('&') < 0 ? s : s.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, function (m, e) {
+      if (e[0] === '#') return String.fromCodePoint(e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : +e.slice(1));
+      return ENT[e];
+    });
+  }
+  function textOfXml(x) { // như textOf nhưng trên chuỗi XML: ghép <t> ngoài <rPh>
+    x = x.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '');
+    var out = '', re = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g, m;
+    while ((m = re.exec(x))) out += m[1];
+    return unesc(out);
+  }
+  /* Đọc luồng XML, gọi onItem(chuỗi XML của từng phần tử <tag>…</tag>); onItem trả false để dừng sớm. */
+  function scanStream(stream, tag, onItem) {
+    var reader = stream.getReader(), dec = new TextDecoder('utf-8'), buf = '', stop = false;
+    var re = new RegExp('<' + tag + '\\b[^>]*?(?:\\/>|>[\\s\\S]*?<\\/' + tag + '>)', 'g');
+    function flush() {
+      re.lastIndex = 0; var m, last = 0;
+      while ((m = re.exec(buf))) { last = re.lastIndex; if (onItem(m[0]) === false) { stop = true; break; } }
+      if (last) buf = buf.slice(last);
+      else { var i = buf.lastIndexOf('<' + tag); if (i > 0) buf = buf.slice(i); }
+    }
+    function pump() {
+      return reader.read().then(function (res) {
+        if (res.done) { buf += dec.decode(); flush(); return; }
+        buf += dec.decode(res.value, { stream: true }); flush();
+        if (stop) { try { reader.cancel(); } catch (e) { /* bỏ qua */ } return; }
+        return pump();
+      });
+    }
+    return pump();
+  }
+  function readSstStream(z) {
+    var sst = [];
+    return scanStream(z.stream('xl/sharedStrings.xml'), 'si', function (x) { sst.push(textOfXml(x)); }).then(function () { return sst; });
+  }
+  var RX_C = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, RX_V = /<v>([\s\S]*?)<\/v>/, RX_R = /\br="([A-Za-z]+)\d*"/, RX_T = /\bt="([^"]*)"/, RX_S = /\bs="(\d+)"/, RX_ROWN = /^<row\b[^>]*?\br="(\d+)"/;
+  /* Sheet lớn: đọc theo luồng. maxRows: dừng sau số dòng này; keep: {cột:1} – sau HEAD_ROWS dòng đầu chỉ giữ các cột này (null = giữ tất cả). */
+  function streamRows(z, path, sst, xfDate, d1904, maxRows, keep) {
+    var rows = [];
+    return scanStream(z.stream(path), 'row', function (x) {
+      var rm = RX_ROWN.exec(x), rn = rm ? +rm[1] : rows.length + 1;
+      while (rows.length < rn - 1) rows.push([]);
+      var head = rows.length < K.HEAD_ROWS, cur = [], next = 0, m;
+      RX_C.lastIndex = 0;
+      while ((m = RX_C.exec(x))) {
+        var at = m[1], inner = m[2] || '', rr = RX_R.exec(at), col = rr ? colIndex(rr[1]) : next; if (col < 0) col = next;
+        next = col + 1;
+        if (!head && keep && !keep[col]) continue;
+        var tm = RX_T.exec(at), t = tm ? tm[1] : null, sm = RX_S.exec(at), s = sm ? +sm[1] : 0, vm = RX_V.exec(inner), v = vm ? unesc(vm[1]) : null, val;
+        var inl = inner.indexOf('<is') >= 0 ? textOfXml(inner) : null;
+        if (t === 's') val = sst[+v] != null ? sst[+v] : '';
+        else if (t === 'inlineStr') val = inl != null ? inl : (v || '');
+        else if (t === 'str' || t === 'e') val = v != null ? v : (inl || '');
+        else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
+        else if (t === 'd') val = v || '';
+        else {
+          val = v || '';
+          if (val !== '' && isFinite(Number(val))) {
+            if (xfDate[s]) val = K.serialToStr(Number(val), d1904);
+            else (cur.n || (cur.n = [])).push(col);
+          }
+        }
+        if (head) while (cur.length < col) cur.push('');
+        cur[col] = val;
+      }
+      while (cur.length && (cur[cur.length - 1] === '' || cur[cur.length - 1] == null)) cur.pop();
+      rows.push(cur);
+      return rows.length < maxRows;
+    }).then(function () { while (rows.length && rows[rows.length - 1].length === 0) rows.pop(); return rows; });
+  }
+  function lazySheet(z, name, path, sst, xfDate, d1904) {
+    var sh = { name: name, rows: [], lazy: true, bytes: z.size(path), kept: null,
+      isNum: function (r, c) { var row = sh.rows[r]; return !!(row && row.n && row.n.indexOf(c) >= 0); } };
+    // keep: {cột:1} hoặc null (đọc đủ mọi cột)
+    sh.load = function (keep) {
+      return streamRows(z, path, sst, xfDate, d1904, Infinity, keep).then(function (rows) { sh.rows = rows; sh.lazy = false; sh.kept = keep; return sh; });
+    };
+    return streamRows(z, path, sst, xfDate, d1904, K.HEAD_ROWS, null).then(function (rows) { sh.rows = rows; return sh; });
+  }
+  /* Sheet báo cáo dạng dọc (nhãn bên trái – số bên phải, có dòng “Khoảng thời gian”), ví dụ sheet “Báo cáo” trong file quyết toán:
+     chuyển thành bảng 1 dòng (tiêu đề = nhãn) để nhận dạng như các file dạng bảng. */
+  function pivotReport(sh) {
+    if (sh.rows.length < 6 || sh.rows.length > 400) return null;
+    var labels = [], vals = [], per = null, nNum = 0;
+    sh.rows.forEach(function (row, r) {
+      var ne = []; for (var c = 0; c < row.length; c++) if (row[c] != null && String(row[c]).trim() !== '') ne.push(c);
+      if (ne.length !== 2) return;
+      var lab = String(row[ne[0]]).trim(), val = row[ne[1]];
+      if (/^(khoang thoi gian|time period|period|statement period)$/.test(K.norm(lab))) per = String(val);
+      if (sh.isNum(r, ne[1]) || (val !== '' && isFinite(Number(val)))) nNum++;
+      labels.push(lab); vals.push(String(val));
+    });
+    if (!per || nNum < 5) return null;
+    return { name: sh.name + ' (bảng tổng hợp)', pivot: true, rows: [['Khoảng thời gian: ' + per], labels, vals],
+      isNum: function (r, c) { return r === 2 && vals[c] !== '' && isFinite(Number(vals[c])); } };
+  }
+
   K.readXlsx = function (buf) {
-    var z = K.unzip(buf);
-    return Promise.all([z.read('xl/workbook.xml'), z.read('xl/_rels/workbook.xml.rels'), z.read('xl/sharedStrings.xml'), z.read('xl/styles.xml')]).then(function (r) {
+    var z = K.unzip(buf), bigSst = z.size('xl/sharedStrings.xml') > K.BIG_XML;
+    return Promise.all([z.read('xl/workbook.xml'), z.read('xl/_rels/workbook.xml.rels'), bigSst ? readSstStream(z) : z.read('xl/sharedStrings.xml'), z.read('xl/styles.xml')]).then(function (r) {
       if (!r[0]) throw new Error('File không phải Excel hợp lệ (thiếu xl/workbook.xml).');
       var wb = xml(r[0]), d1904 = false;
       var pr = els(wb, 'workbookPr')[0]; if (pr) { var a = pr.getAttribute('date1904'); d1904 = a === '1' || a === 'true'; }
       var rels = {};
       if (r[1]) { var rs = els(xml(r[1]), 'Relationship'); for (var i = 0; i < rs.length; i++) { var t = rs[i].getAttribute('Target').replace(/\\/g, '/'); rels[rs[i].getAttribute('Id')] = t[0] === '/' ? t.slice(1) : 'xl/' + t; } }
       var sst = [];
-      if (r[2]) { var si = els(xml(r[2]), 'si'); for (var j = 0; j < si.length; j++) sst.push(textOf(si[j])); }
+      if (bigSst) sst = r[2];
+      else if (r[2]) { var si = els(xml(r[2]), 'si'); for (var j = 0; j < si.length; j++) sst.push(textOf(si[j])); }
       var xfDate = [];
       if (r[3]) {
         var st = xml(r[3]), custom = {}, nf = els(st, 'numFmt');
@@ -207,8 +317,15 @@
         for (var a2 = 0; a2 < at.length; a2++) if (at[a2].localName === 'id' && /relationships/.test(at[a2].namespaceURI || '')) rid = at[a2].value;
         if (rid && rels[rid]) sheets.push({ name: sh[s2].getAttribute('name'), path: rels[rid] });
       }
-      return Promise.all(sheets.map(function (s) { return z.read(s.path).then(function (txt) { return txt == null ? null : parseSheet(s.name, txt, sst, xfDate, d1904); }); }))
-        .then(function (list) { return list.filter(Boolean); });
+      return Promise.all(sheets.map(function (s) {
+        if (!z.has(s.path)) return null;
+        if (z.size(s.path) > K.BIG_XML) return lazySheet(z, s.name, s.path, sst, xfDate, d1904);
+        return z.read(s.path).then(function (txt) { return txt == null ? null : parseSheet(s.name, txt, sst, xfDate, d1904); });
+      })).then(function (list) {
+        var out = [];
+        list.filter(Boolean).forEach(function (sh) { out.push(sh); var pv = !sh.lazy && pivotReport(sh); if (pv) out.push(pv); });
+        return out;
+      });
     });
   };
   function parseSheet(name, txt, sst, xfDate, d1904) {

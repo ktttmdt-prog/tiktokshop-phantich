@@ -52,6 +52,7 @@
     ctx.targets = M.targets(ctx.ads, th, ctx.official, ctx.remaining);
     ctx.orders = M.orders(cube, f);
     ctx.stl = M.settlement(cube, f);
+    ctx.stlr = M.settlementReport(cube, f);
     ctx.rec = M.reconcile(cube, f, ctx.ads);
     ctx.vid = M.video(cube, f);
     ctx.aff = M.affiliate(cube, f);
@@ -158,11 +159,53 @@
     var rows = [
       ['<strong>Doanh thu gộp theo báo cáo quảng cáo</strong>', s.n ? money(s.rev) : M.NODATA, 'Báo cáo quảng cáo (GMV Max / chiến dịch)', cov(s.coverage), s.n ? 'Doanh thu TikTok quy cho quảng cáo; chưa trừ hủy/hoàn' : 'Cần nhập báo cáo quảng cáo'],
       ['<strong>Doanh số sau hoàn/hủy</strong>', o.netSales != null ? money(o.netSales) : M.NODATA, 'File đơn hàng TikTok Shop', cov(o.coverage), o.n ? (o.netSales != null ? 'Số tiền đơn (mỗi đơn tính 1 lần) − đơn hủy − đơn chưa thanh toán − tiền hoàn; theo ngày tạo đơn' : (!o.hasStatus ? 'Thiếu cột trạng thái đơn' : !o.hasOrderAmt ? 'Thiếu cột Số tiền đơn hàng' : 'Thiếu cột Số tiền hoàn')) : 'Cần nhập file đơn hàng'],
-      ['<strong>Tiền quyết toán</strong>', st.n ? money(st.amount) : M.NODATA, 'File tài chính (Thu nhập / Quyết toán)', cov(st.coverage), st.n ? 'Theo ngày quyết toán; đã trừ phí sàn' : 'Cần nhập file quyết toán']
+      st.n || !(ctx.stlr && ctx.stlr.n) ? ['<strong>Tiền quyết toán</strong>', st.n ? money(st.amount) : M.NODATA, 'File tài chính (Thu nhập / Quyết toán)', cov(st.coverage), st.n ? 'Theo ngày quyết toán; đã trừ phí sàn' : 'Cần nhập file quyết toán']
+        : ['<strong>Tiền quyết toán</strong>', money(ctx.stlr.t.settlement_total), 'File quyết toán – sheet Báo cáo', cov(ctx.stlr.coverage), 'Theo ngày quyết toán; đã trừ phí sàn ' + money(-ctx.stlr.t.fees_total) + ' và hoàn tiền ' + money(-ctx.stlr.t.refund_after)]
     ];
     var sp = ctx.shop;
     rows.push(['<strong>GMV toàn shop</strong> <span class="muted small">(tham khảo)</span>', sp && sp.n ? money(sp.gmv) : M.NODATA, 'Phân tích shop (Shop Analytics)', cov(sp && sp.coverage), sp && sp.n ? 'Mọi kênh, theo ngày đặt hàng; chưa trừ hủy/hoàn' + partialTag(sp.partial) : 'Cần nhập file Shop Analytics_Key metrics']);
     return tbl(['Chỉ tiêu', { t: 'Giá trị', num: true }, 'Nguồn', 'Kỳ dữ liệu thực có', 'Ghi chú'], rows);
+  }
+
+  function tieOut(diff, n, label) {
+    if (diff == null) return [esc(label), '<span class="muted">' + M.NODATA + '</span>', ''];
+    var ok = Math.abs(diff) <= Math.max(1, n);
+    return [esc(label), ok ? badge({ cls: 'good', icon: '✓', label: 'Khớp' }) : badge({ cls: 'bad', icon: '✗', label: 'Lệch' }), diff === 0 ? '0 đ' : money(diff) + (ok ? ' (làm tròn)' : '')];
+  }
+  /* Quyết toán theo báo cáo tổng hợp của TikTok: doanh thu → hoàn → từng nhóm phí → điều chỉnh → tiền về */
+  function settlementReportHtml(sr) {
+    var t = sr.t, base = t.gross_after || 0;
+    var pct = function (x) { return base > 0 && x ? M.fmtPct(Math.abs(x) / base, 1) : (x === 0 ? '0%' : '—'); };
+    var h = '<h4>C1. Từ doanh thu bán hàng đến tiền TikTok chuyển về</h4>';
+    h += '<div class="tiles">' +
+      tile('Doanh thu hàng bán', money(t.gross_after), 'sau giảm giá của shop') +
+      tile('Hoàn tiền cho khách', money(-t.refund_after), sr.refundRate == null ? '' : M.fmtPct(sr.refundRate, 1) + ' doanh thu hàng bán') +
+      tile('Phí và hoa hồng TikTok trừ', money(-t.fees_total), base > 0 ? M.fmtPct(-t.fees_total / base, 1) + ' doanh thu hàng bán' + (sr.feeRate == null ? '' : ' (' + M.fmtPct(sr.feeRate, 1) + ' sau hoàn)') : '') +
+      tile('Tiền quyết toán về shop', money(t.settlement_total), sr.keepRate == null ? '' : 'bằng ' + M.fmtPct(sr.keepRate, 1) + ' doanh thu hàng bán') + '</div>';
+    var rows = [
+      ['Doanh thu hàng bán (sau giảm giá của shop)', money(t.gross_after), base > 0 ? '100%' : '—', 'Tổng phụ sau giảm giá của người bán'],
+      ['− Hoàn tiền cho khách', money(t.refund_after), pct(t.refund_after), 'Tiền hàng trả lại khách khi hoàn/trả'],
+      ['<strong>= Doanh thu sau hoàn</strong>', '<strong>' + money(t.revenue_total) + '</strong>', pct(t.revenue_total), 'Tổng doanh thu']
+    ];
+    sr.groups.forEach(function (g) { if (g.amount) rows.push(['− ' + esc(g.label), money(g.amount), pct(g.amount), esc(g.hint)]); });
+    rows.push(['<strong>= Tổng phí và hoa hồng</strong>', '<strong>' + money(t.fees_total) + '</strong>', pct(t.fees_total), sr.feeRate == null ? '' : M.fmtPct(sr.feeRate, 1) + ' doanh thu sau hoàn']);
+    rows.push(['+ Điều chỉnh', money(t.adj_total), pct(t.adj_total), sr.adj.map(function (a) { return esc(a.label) + ' ' + money(a.amount); }).join('; ')]);
+    rows.push(['<strong>= Tiền quyết toán</strong>', '<strong>' + money(t.settlement_total) + '</strong>', pct(t.settlement_total), 'Tiền TikTok chuyển vào số dư shop']);
+    h += tbl(['Khoản', { t: 'Số tiền', num: true }, { t: 'Trên doanh thu hàng bán', num: true }, 'Ghi chú'], rows);
+    if (sr.feeRate != null && sr.keepRate != null) h += '<p class="note">Cách đọc: cứ 100 đồng doanh thu hàng bán, khách hoàn lại ' + num(sr.refundRate * 100, 1) + ' đồng, TikTok giữ ' + num(-t.fees_total / base * 100, 1) + ' đồng phí và hoa hồng, shop nhận về ' + num(sr.keepRate * 100, 1) + ' đồng – chưa trừ giá vốn, quảng cáo và chi phí vận hành.</p>';
+    var lines = [];
+    sr.groups.forEach(function (g) { g.lines.forEach(function (l) { lines.push([esc(g.label), esc(l.label), money(l.amount), t.revenue_total > 0 ? M.fmtPct(Math.abs(l.amount) / t.revenue_total, 2) : '—']); }); });
+    h += '<h4>Chi tiết từng loại phí</h4>' + tbl(['Nhóm', 'Loại phí', { t: 'Số tiền', num: true }, { t: 'Trên doanh thu sau hoàn', num: true }], lines);
+    if (sr.byPeriod.length > 1) {
+      h += '<h4>Theo kỳ báo cáo</h4>' + tbl(['Kỳ', { t: 'Doanh thu hàng bán', num: true }, { t: 'Hoàn tiền', num: true }, { t: 'Tỷ lệ hoàn', num: true }, { t: 'Tổng phí', num: true }, { t: 'Phí / DT sau hoàn', num: true }, { t: 'Điều chỉnh', num: true }, { t: 'Tiền quyết toán', num: true }],
+        sr.byPeriod.map(function (p) { return [M.fmtPeriod(p.from, p.to) + partialTag(p.partial), money(p.t.gross_after), money(p.t.refund_after), p.refundRate == null ? '—' : M.fmtPct(p.refundRate, 1), money(p.t.fees_total), p.feeRate == null ? '—' : M.fmtPct(p.feeRate, 1), money(p.t.adj_total), money(p.t.settlement_total)]; }));
+    }
+    h += '<h4>Kiểm tra số liệu</h4>' + tbl(['Phép kiểm tra', 'Kết quả', { t: 'Chênh lệch', num: true }], [
+      tieOut(sr.revDiff, sr.n, 'Doanh thu hàng bán + hoàn tiền = Tổng doanh thu'),
+      tieOut(sr.feeLinesDiff, sr.n, 'Cộng từng loại phí = Tổng phí (lệch → có loại phí mới chưa tách nhóm)'),
+      tieOut(sr.calcDiff, sr.n, 'Tổng doanh thu + Tổng phí + Điều chỉnh = Tiền quyết toán')]);
+    h += src('Nguồn: sheet “Báo cáo” trong file quyết toán (income_….xlsx) · theo ngày quyết toán · kỳ ' + cov(sr.coverage) + partialTag(sr.partial) + (sr.excluded.length ? ' · ' + sr.excluded.length + ' báo cáo chỉ trùng một phần với kỳ lọc không được tính' : ''));
+    return h;
   }
 
   // ---------- ROAS & CHIẾN DỊCH ----------
@@ -261,8 +304,12 @@
     }
 
     h += '<h3>C. Tiền quyết toán (file tài chính)</h3>';
-    if (!st.n) h += nodata('Kỳ này chưa có file quyết toán. Cần nhập file Thu nhập/Quyết toán (có cột Mã đơn/điều chỉnh, Thời gian quyết toán, Tổng tiền quyết toán).');
-    else {
+    var sr = ctx.stlr;
+    if (sr && sr.n) h += settlementReportHtml(sr);
+    else if (sr && sr.excluded.length) h += '<p class="warnline">! Có ' + sr.excluded.length + ' báo cáo quyết toán theo kỳ chỉ trùng một phần với kỳ lọc nên không được tính – chọn kỳ lọc bao trọn kỳ của báo cáo (thường là cả tháng).</p>';
+    if (!st.n && !(sr && sr.n)) h += nodata('Kỳ này chưa có file quyết toán. Xuất từ Seller Center → Tài chính → Giao dịch → Đã quyết toán → Xem thêm → Xuất (file income_….xlsx), chọn đúng tháng, rồi nhập ở tab Nhập dữ liệu.');
+    else if (st.n) {
+      if (sr && sr.n) h += '<h4>C2. Quyết toán từng dòng (file chi tiết) theo loại</h4>';
       h += tbl(['Loại', { t: 'Số dòng', num: true }, { t: 'Tổng tiền quyết toán', num: true }, { t: 'Tổng doanh thu (file)', num: true }, { t: 'Tổng phí', num: true }],
         st.byType.map(function (b) { return [esc(b.type), num(b.count), money(b.amount), st.hasRevenue ? money(b.revenue) : M.NODATA, st.hasFees ? money(b.fees) : M.NODATA]; }),
         { foot: ['<strong>Cộng</strong>', num(st.count), money(st.amount), st.hasRevenue ? money(st.revenue) : M.NODATA, st.hasFees ? money(st.fees) : M.NODATA] });

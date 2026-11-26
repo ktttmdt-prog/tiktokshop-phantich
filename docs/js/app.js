@@ -126,7 +126,7 @@
           var item = { name: f.name, state: 'đang kiểm tra' }; S.staffFiles.push(item); renderStaff();
           f.arrayBuffer().then(function (buf) {
             item.bytes = new Uint8Array(buf);
-            return I.addUpload(f.name, buf).then(function (up) { return I.preview({ uploadId: up.id, shopId: '__staff' }); });
+            return I.addUpload(f.name, buf).then(function (up) { var rq = { uploadId: up.id, shopId: '__staff' }; return I.ready(rq).then(function () { return I.preview(rq); }); });
           }).then(function (p) { item.p = p; item.state = 'ok'; renderStaff(); }).catch(function (e) { item.state = 'lỗi'; item.err = e.message; renderStaff(); });
         });
       });
@@ -260,7 +260,7 @@
     var c = S.cube, f = S.f, keep = function (r) { var a = r.from || r.date, b = r.to || r.date; return (!f.shop || r.shop === f.shop) && !(b < f.from || a > f.to); };
     var pick = function (sec) { var cols = c[sec].cols; return { cols: cols, rows: c['_' + sec].filter(keep).map(function (o) { return cols.map(function (k) { return o[k]; }); }) }; };
     var out = { generatedAt: c.generatedAt, today: c.today, thresholds: c.thresholds, official: c.official, shops: (c.shops || []).filter(function (s) { return !f.shop || s.id === f.shop; }) };
-    ['ads', 'acct', 'inv', 'ord', 'stl', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { out[k] = pick(k); }); out.market = c.market || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
+    ['ads', 'acct', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { out[k] = pick(k); }); out.market = c.market || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
     var tp = {}, tc = c.topup.cols;
     c._topup.filter(keep).forEach(function (r) { var k = [r.shop, r.date, r.accountId, r.cls, r.pay, r.ok].join('|'); var a = tp[k] || (tp[k] = { shop: r.shop, date: r.date, time: r.date, accountId: r.accountId, accountName: r.accountName, type: 'Tổng trong ngày', subtype: '', status: r.ok ? 'Thành công' : 'Không thành công', moneyType: '', amount: 0, voucher: '', imp: 0, cls: r.cls, pay: r.pay, ok: r.ok }); a.amount += r.amount; });
     out.topup = { cols: tc, rows: Object.keys(tp).map(function (k) { return tc.map(function (x) { return tp[k][x]; }); }) };
@@ -350,8 +350,7 @@
     var o = card.opts, req = { uploadId: card.uploadId, shopId: o.shopId, newShop: o.newShop, scope: o.scope, from: o.from, to: o.to, category: o.category };
     if (card.sheet != null) req.sheet = card.sheet;
     if (card.manual) { req.dataset = card.manual.dataset; req.headerRow = card.manual.headerRow; req.mapping = card.manual.mapping; req.saveTemplate = card.manual.save; }
-    try { card.p = I.preview(req); card.state = 'ready'; } catch (e) { card.state = 'error'; card.error = e.message; }
-    renderCards();
+    I.ready(req).then(function () { card.p = I.preview(req); card.state = 'ready'; }).catch(function (e) { card.state = 'error'; card.error = e.message; }).then(renderCards);
   }
   function cnt(p, k) { return p.counts ? p.counts[k] : 0; }
   function renderCards() { var h = $('#cards'); if (h) h.innerHTML = S.cards.map(cardHtml).join(''); }

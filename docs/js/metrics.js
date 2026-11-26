@@ -83,7 +83,7 @@
     return sec.rows.map(function (r) { var o = {}; for (var i = 0; i < c.length; i++) o[c[i]] = r[i]; return o; });
   };
   M.prepare = function (cube) {
-    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { cube['_' + k] = M.table(cube[k] || { cols: [], rows: [] }); });
+    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { cube['_' + k] = M.table(cube[k] || { cols: [], rows: [] }); });
     cube._shopName = {};
     (cube.shops || []).forEach(function (s) { cube._shopName[s.id] = s.name; });
     cube.thresholds = (cube.thresholds || [12, 13]).map(Number).sort(function (a, b) { return a - b; });
@@ -225,6 +225,50 @@
     var bt = {};
     rows.forEach(function (r) { var k = r.type || '(không ghi loại)'; var b = bt[k] || (bt[k] = { type: k, count: 0, amount: 0, revenue: 0, fees: 0 }); b.count += r.count; b.amount += r.amount; b.revenue += r.revenue; b.fees += r.fees; });
     o.byType = Object.keys(bt).map(function (k) { return bt[k]; });
+    return o;
+  };
+
+  // ---------- Quyết toán theo báo cáo tổng hợp của TikTok (sheet “Báo cáo”): tách từng loại phí ----------
+  M.STLR_GROUPS = [
+    { key: 'platform', label: 'Phí sàn TikTok', hint: 'hoa hồng sàn, phí giao dịch, phí xử lý đơn, SFR, vận chuyển', keys: ['fee_commission', 'fee_txn', 'fee_processing', 'fee_sfr', 'fee_sfp', 'fee_shipping'] },
+    { key: 'promo', label: 'Phí chương trình khuyến mãi', hint: 'Voucher Xtra, Flash Sale, ưu đãi LIVE…', keys: ['fee_voucher_xtra', 'fee_flash', 'fee_live_offer', 'fee_cashback', 'fee_eams', 'fee_paylater', 'fee_campaign'] },
+    { key: 'creator', label: 'Hoa hồng nhà sáng tạo (liên kết)', hint: 'trả cho KOL/KOC bán hộ qua liên kết', keys: ['fee_aff', 'fee_aff_ads', 'fee_aff_partner', 'fee_aff_partner_ads', 'fee_aff_deposit', 'fee_aff_refund'] },
+    { key: 'ads', label: 'Quảng cáo / dịch vụ trừ vào tiền hàng', hint: 'GMV Max, gói dịch vụ được quản lý', keys: ['fee_gmvmax_voucher', 'fee_gmvmax_voucher_tax', 'fee_gmvmax_ads', 'fee_managed_tax', 'fee_managed_order'] },
+    { key: 'tax', label: 'Thuế do TikTok khấu trừ', hint: 'GTGT, TNCN khấu trừ thay', keys: ['vat_withheld', 'pit_withheld'] }
+  ];
+  M.STLR_LABEL = { fee_commission: 'Phí hoa hồng của TikTok Shop', fee_txn: 'Phí giao dịch', fee_processing: 'Phí xử lý đơn hàng', fee_sfr: 'Phí dịch vụ SFR', fee_sfp: 'Phí dịch vụ SFP',
+    fee_shipping: 'Phí vận chuyển của người bán', fee_voucher_xtra: 'Phí dịch vụ Voucher Xtra', fee_flash: 'Phí dịch vụ Flash Sale', fee_live_offer: 'Phí ưu đãi đặc biệt trên LIVE',
+    fee_cashback: 'Phí dịch vụ hoàn tiền thưởng', fee_eams: 'Phí chương trình EAMS', fee_paylater: 'Phí chương trình TikTok PayLater', fee_campaign: 'Phí nguồn lực chiến dịch',
+    fee_aff: 'Hoa hồng liên kết', fee_aff_ads: 'Hoa hồng liên kết Quảng cáo cửa hàng', fee_aff_partner: 'Hoa hồng của đối tác liên kết', fee_aff_partner_ads: 'Hoa hồng QC cửa hàng của đối tác liên kết',
+    fee_aff_deposit: 'Tiền cọc hoa hồng liên kết', fee_aff_refund: 'Hoàn hoa hồng liên kết', fee_gmvmax_voucher: 'Voucher GMV Max', fee_gmvmax_voucher_tax: 'Thuế bán hàng của voucher GMV Max',
+    fee_gmvmax_ads: 'Phí quảng cáo GMV Max', fee_managed_tax: 'Gói dịch vụ được quản lý (thuế bán hàng)', fee_managed_order: 'Gói dịch vụ được quản lý (phí mỗi đơn)',
+    vat_withheld: 'Thuế GTGT do TikTok Shop khấu trừ', pit_withheld: 'Thuế TNCN do TikTok Shop khấu trừ',
+    adj_logistics: 'Bồi thường do vận chuyển – kho vận', adj_dissatisfied: 'Bồi thường do không hài lòng', adj_platform_comp: 'Bồi thường của nền tảng', adj_penalty: 'Tiền phạt của nền tảng',
+    adj_seller_deduct: 'Các khoản giảm trừ do người bán chịu', adj_other: 'Điều chỉnh khác' };
+  M.STLR_ADJ = ['adj_logistics', 'adj_dissatisfied', 'adj_platform_comp', 'adj_penalty', 'adj_seller_deduct', 'adj_other'];
+  function stlrCalc(rows, keys) {
+    var t = {}; keys.forEach(function (k) { t[k] = sum(rows, k); });
+    var o = { t: t };
+    o.groups = M.STLR_GROUPS.map(function (g) {
+      var lines = g.keys.filter(function (k) { return t[k]; }).map(function (k) { return { key: k, label: M.STLR_LABEL[k] || k, amount: t[k] }; });
+      return { key: g.key, label: g.label, hint: g.hint, amount: lines.reduce(function (a, b) { return a + b.amount; }, 0), lines: lines };
+    });
+    o.adj = M.STLR_ADJ.filter(function (k) { return t[k]; }).map(function (k) { return { key: k, label: M.STLR_LABEL[k], amount: t[k] }; });
+    var feeSum = o.groups.reduce(function (a, g) { return a + g.amount; }, 0);
+    o.feeLinesDiff = Math.round(feeSum - (t.fees_total || 0));
+    o.calcDiff = Math.round((t.revenue_total || 0) + (t.fees_total || 0) + (t.adj_total || 0) - (t.settlement_total || 0));
+    o.revDiff = (t.gross_after || t.refund_after) ? Math.round((t.gross_after || 0) + (t.refund_after || 0) - (t.revenue_total || 0)) : null;
+    o.feeRate = t.revenue_total > 0 ? -t.fees_total / t.revenue_total : null;
+    o.refundRate = t.gross_after > 0 ? -t.refund_after / t.gross_after : null;
+    o.keepRate = t.gross_after > 0 ? t.settlement_total / t.gross_after : null;
+    return o;
+  }
+  M.settlementReport = function (cube, f) {
+    var ex = [], rows = (cube._stlr || []).filter(byShop(f)).filter(function (r) { return incl(r, f, ex); });
+    var keys = cube.stlr && cube.stlr.cols ? cube.stlr.cols.slice(5) : [];
+    var o = stlrCalc(rows, keys);
+    o.n = rows.length; o.excluded = ex; o.coverage = range(rows, 'from', 'to'); o.partial = rows.some(function (r) { return r.partial; });
+    o.byPeriod = rows.map(function (r) { var c = stlrCalc([r], keys); c.from = r.from; c.to = r.to; c.partial = r.partial; return c; });
     return o;
   };
 
@@ -427,8 +471,14 @@
     }
     if (rc && rc.acct.n && s.n && rc.dash > 0 && Math.abs(rc.diffAcct) / rc.dash > 0.01) out.push('Chi phí theo file Cost lệch ' + M.fmtMoney(rc.diffAcct) + ' so với báo cáo quảng cáo – kiểm tra lại kỳ khai báo của file Cost và phạm vi tài khoản trước khi ghi sổ.');
     if (rc && rc.topup.nAll) out.push('Đối chiếu tiền thực trả TikTok Ads ' + M.fmtMoney(rc.topup.cashOut) + ' với sao kê thẻ/ngân hàng và hóa đơn VNTT tương ứng.');
+    var sr = ctx.stlr;
+    if (sr && sr.n && sr.feeRate != null) {
+      var gTop = sr.groups.filter(function (g) { return g.amount < 0; }).sort(function (a, b) { return a.amount - b.amount; })[0];
+      out.push('Phí và hoa hồng TikTok trừ vào tiền hàng bằng ' + M.fmtPct(sr.feeRate, 1) + ' doanh thu sau hoàn (' + M.fmtMoney(-sr.t.fees_total) + ', kỳ ' + M.fmtPeriod(sr.coverage.from, sr.coverage.to) + ')' + (gTop ? '; khoản lớn nhất là ' + gTop.label.toLowerCase() + ' ' + M.fmtMoney(-gTop.amount) : '') + ' – đưa tỷ lệ này vào giá vốn khi xét giá bán và chương trình khuyến mãi.');
+      if (sr.refundRate != null && sr.refundRate > 0.15) out.push('Hoàn tiền cho khách theo quyết toán bằng ' + M.fmtPct(sr.refundRate, 1) + ' doanh thu hàng bán (' + M.fmtMoney(-sr.t.refund_after) + ') – đề nghị bộ phận vận hành báo cáo nguyên nhân hoàn theo sản phẩm.');
+    }
     if (!o.n) out.push('Bổ sung file đơn hàng (có trạng thái, số tiền đơn, tiền hoàn) để tính tỷ lệ hủy/hoàn và doanh số sau hoàn/hủy.');
-    if (!ctx.stl.n) out.push('Bổ sung file quyết toán để đối chiếu doanh thu với tiền TikTok thực chuyển về.');
+    if (!ctx.stl.n && !(ctx.stlr && ctx.stlr.n)) out.push('Bổ sung file quyết toán để đối chiếu doanh thu với tiền TikTok thực chuyển về.');
     return out;
   };
 

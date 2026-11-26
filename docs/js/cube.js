@@ -23,7 +23,7 @@
     if (s.indexOf('hoan') >= 0 || s.indexOf('refund') >= 0) return 'refund';
     return 'other';
   };
-  Q.topupOk = function (status) { var s = K.norm(status); return !/khong thanh cong|that bai|fail|huy/.test(s); };
+  Q.topupOk = function (status) { var s = K.norm(status); return !/khong thanh cong|that bai|fail|(^| )huy( |$)|cancel/.test(s); };
 
   /* Đơn hàng theo shop × ngày tạo đơn: mỗi đơn tính 1 lần, giá trị cấp đơn không nhân theo dòng SKU.
      a: 0 orders,1 skuLines,2 qty,3 orderAmt,4 skuAmt,5 cancelOrders,6 cancelAmt,7 retOrders,8 refundAmt,9 unpaidOrders,10 unpaidAmt,
@@ -41,8 +41,9 @@
         if (typeof v.subtotal_after === 'number') { A[4] += v.subtotal_after; A[17] = 1; }
         var s = K.norm(v.status || ''), sub = K.norm(v.substatus || ''), crt = K.norm(v.cancel_return_type || '');
         if (s) anyS = true;
-        if (!(s.indexOf('huy') >= 0 || s.indexOf('cancel') >= 0)) allC = false;
-        if (/return|refund|tra hang|hoan/.test(crt) || /return|refund|tra hang|hoan tien/.test(sub) || n(v.return_qty) > 0) ret = true;
+        // “huy” phải là một từ riêng: “van chuyen” (vận chuyển) cũng chứa chuỗi “huy”
+        if (!(/(^| )huy( |$)/.test(s) || s.indexOf('cancel') >= 0)) allC = false;
+        if (/return|refund|tra hang|hoan tien/.test(crt) || /return|refund|tra hang|hoan tien/.test(sub) || n(v.return_qty) > 0) ret = true;
         if (/unpaid|chua thanh toan|cho thanh toan|awaiting payment/.test(s)) unpaid = true;
         if (typeof v.order_amount === 'number') { if (oa != null && oa !== v.order_amount) inc = true; oa = oa == null ? v.order_amount : Math.max(oa, v.order_amount); }
         if (typeof v.order_refund === 'number') orf = orf == null ? v.order_refund : Math.max(orf, v.order_refund);
@@ -91,6 +92,9 @@
       if (typeof r.v.revenue === 'number') { a[5] += r.v.revenue; a[7] = 1; } if (typeof r.v.fees === 'number') { a[6] += r.v.fees; a[8] = 1; }
     });
     o.stl = { cols: ['shop', 'date', 'type', 'count', 'amount', 'revenue', 'fees', 'hasRevenue', 'hasFees'], rows: Array.from(stl.values()) };
+    var stlrKeys = SC.get('settlement_report').fields.filter(function (x) { return x.type === 'Money'; }).map(function (x) { return x.key; });
+    o.stlr = { cols: ['shop', 'from', 'to', 'partial', 'imp'].concat(stlrKeys),
+      rows: active('settlement_report').map(function (r) { return [r.shop, r.from, r.to, part(r), r.imp].concat(stlrKeys.map(function (k) { return nv(r.v[k]); })); }) };
     o.vid = { cols: ['shop', 'scope', 'date', 'gmv', 'gmvDirect', 'gmvIndirect', 'vv', 'sku', 'skuDirect', 'skuIndirect', 'impr', 'clicks', 'viewers', 'partial', 'imp'],
       rows: active('video_daily').map(function (r) { var v = r.v; return [r.shop, r.scope, r.from, nv(v.gmv_total), nv(v.gmv_direct), nv(v.gmv_indirect), nv(v.vv), nv(v.sku_orders), nv(v.sku_direct), nv(v.sku_indirect), nv(v.impressions), nv(v.clicks), nv(v.product_viewers), part(r), r.imp]; }) };
     o.aff = { cols: ['shop', 'from', 'to', 'gmv', 'items', 'refund', 'itemsRefunded', 'commission', 'videos', 'lives', 'samples', 'creators', 'ctr', 'ctor', 'aov', 'partial', 'imp'],
