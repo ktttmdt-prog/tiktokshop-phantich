@@ -237,8 +237,10 @@
     var rows = [];
     return scanStream(z.stream(path), 'row', function (x) {
       var rm = RX_ROWN.exec(x), rn = rm ? +rm[1] : rows.length + 1;
-      while (rows.length < rn - 1) rows.push([]);
-      var head = rows.length < K.HEAD_ROWS, cur = [], next = 0, m;
+      // một số file TikTok ghi mỗi ô thành một thẻ <row> riêng, cùng số dòng → gộp vào dòng trước
+      var merge = !!rm && rows.length > 0 && rn === rows.length;
+      if (!merge) while (rows.length < rn - 1) rows.push([]);
+      var head = (merge ? rows.length - 1 : rows.length) < K.HEAD_ROWS, cur = merge ? rows[rows.length - 1] : [], next = 0, m;
       RX_C.lastIndex = 0;
       while ((m = RX_C.exec(x))) {
         var at = m[1], inner = m[2] || '', rr = RX_R.exec(at), col = rr ? colIndex(rr[1]) : next; if (col < 0) col = next;
@@ -262,9 +264,13 @@
         cur[col] = val;
       }
       while (cur.length && (cur[cur.length - 1] === '' || cur[cur.length - 1] == null)) cur.pop();
-      rows.push(cur);
-      return rows.length < maxRows;
-    }).then(function () { while (rows.length && rows[rows.length - 1].length === 0) rows.pop(); return rows; });
+      if (!merge) rows.push(cur);
+      return rows.length <= maxRows; // đọc thêm 1 dòng để dòng cuối được gộp đủ ô, rồi cắt bỏ
+    }).then(function () {
+      if (rows.length > maxRows) rows.length = maxRows;
+      while (rows.length && rows[rows.length - 1].length === 0) rows.pop();
+      return rows;
+    });
   }
   function lazySheet(z, name, path, sst, xfDate, d1904) {
     var sh = { name: name, rows: [], lazy: true, bytes: z.size(path), kept: null,
@@ -332,8 +338,9 @@
     var doc = xml(txt), rowsEl = els(doc, 'row'), rows = [], num = new Set();
     for (var i = 0; i < rowsEl.length; i++) {
       var re = rowsEl[i], rn = +(re.getAttribute('r') || 0);
-      if (rn) while (rows.length < rn - 1) rows.push([]);
-      var cur = [], next = 0, cells = re.childNodes;
+      var merge = rn > 0 && rows.length > 0 && rn === rows.length; // nhiều thẻ <row> cùng số dòng → gộp
+      if (rn && !merge) while (rows.length < rn - 1) rows.push([]);
+      var cur = merge ? rows[rows.length - 1] : [], next = 0, cells = re.childNodes;
       for (var j = 0; j < cells.length; j++) {
         var c = cells[j]; if (c.nodeType !== 1 || c.localName !== 'c') continue;
         var ref = c.getAttribute('r'), col = ref ? colIndex(ref) : next; if (col < 0) col = next;
@@ -349,14 +356,14 @@
           val = v || '';
           if (val !== '' && isFinite(Number(val))) {
             if (xfDate[s]) val = K.serialToStr(Number(val), d1904);
-            else num.add(rows.length + '|' + col);
+            else num.add((merge ? rows.length - 1 : rows.length) + '|' + col);
           }
         }
         while (cur.length < col) cur.push('');
         cur[col] = val; next = col + 1;
       }
       while (cur.length && (cur[cur.length - 1] === '' || cur[cur.length - 1] == null)) cur.pop();
-      rows.push(cur);
+      if (!merge) rows.push(cur);
     }
     while (rows.length && rows[rows.length - 1].length === 0) rows.pop();
     return { name: name, rows: rows, isNum: function (r, c) { return num.has(r + '|' + c); } };
