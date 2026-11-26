@@ -2,6 +2,8 @@
 
 Ứng dụng web tĩnh phân tích quảng cáo, doanh thu và đối chiếu kế toán cho TikTok Shop từ các file Excel/CSV xuất từ TikTok.
 
+**Mở ứng dụng:** https://ktttmdt-prog.github.io/tiktokshop-phantich/
+
 - File TikTok được đọc và tính toán **ngay trong trình duyệt của người dùng**; dữ liệu lưu trong trình duyệt của máy đó, không gửi lên máy chủ.
 - Kho mã nguồn này **chỉ chứa chương trình** – không chứa file dữ liệu, báo cáo hay bản sao lưu.
 - Chạy được khi mất mạng sau lần mở đầu tiên.
