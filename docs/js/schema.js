@@ -3,7 +3,7 @@
   'use strict';
   var K = root.TTSK, S = { all: [] };
   // f(key, nhãn, kiểu, [tên cột], tùy chọn{req, pii, neg, na, miss})
-  function f(key, label, type, syn, o) { o = o || {}; return { key: key, label: label, type: type, syn: syn || [], required: !!o.req, pii: !!o.pii, negate: !!o.neg, nonAdd: !!o.na, missing: o.miss || null }; }
+  function f(key, label, type, syn, o) { o = o || {}; return { key: key, label: label, type: type, syn: syn || [], required: !!o.req, pii: !!o.pii, negate: !!o.neg, nonAdd: !!o.na, missing: o.miss || null, dashZero: !!o.dz }; }
   function ds(o) { S.all.push(o); return o; }
   var PII = ['buyer username', 'buyer name', 'buyer message', 'recipient', 'recipient name', 'phone #', 'phone', 'phone number', 'zipcode', 'zip code', 'country', 'province', 'district', 'ward',
     'detail address', 'additional address information', 'address', 'shipping address', 'ten nguoi mua', 'ten nguoi nhan', 'nguoi nhan', 'so dien thoai', 'dien thoai', 'sdt', 'sdt nguoi nhan',
@@ -13,13 +13,21 @@
   ds({ key: 'ads_campaign', label: 'Báo cáo quảng cáo (chiến dịch / GMV Max)', source: 'TikTok Ads / Seller Center → Quảng cáo → GMV Max → Xuất báo cáo',
     desc: 'Chi phí, doanh thu gộp theo báo cáo quảng cáo, số đơn SKU – theo chiến dịch và/hoặc theo ngày.', dateField: 'date', signature: ['cost', 'revenue'],
     keyFields: ['campaign_id', 'campaign_name', 'date'], entityFields: ['campaign_id', 'campaign_name'], totalLabelFields: ['campaign_name', 'campaign_id', 'date', 'shop_name'], coverage: true,
-    fields: [f('date', 'Ngày', 'Date', ['ngay', 'thoi gian', 'date', 'day', 'by day', 'stat time day', 'ngay bao cao', 'stat time']),
+    fields: [f('date', 'Ngày', 'Date', ['ngay', 'thoi gian', 'date', 'day', 'by day', 'stat time day', 'ngay bao cao', 'stat time', 'theo ngay']),
       f('shop_name', 'Tên shop', 'Text', ['shop', 'ten shop', 'cua hang', 'ten cua hang', 'store', 'store name', 'shop name']),
+      f('account_name', 'Tài khoản quảng cáo', 'Text', ['ten tai khoan', 'account name', 'tai khoan quang cao', 'advertiser name']),
+      f('account_id', 'ID tài khoản quảng cáo', 'Text', ['id tai khoan', 'ma tai khoan', 'account id', 'advertiser id']),
+      f('campaign_type', 'Loại chiến dịch', 'Text', ['loai chien dich', 'campaign type']),
       f('campaign_id', 'ID chiến dịch', 'Text', ['id chien dich', 'campaign id', 'ma chien dich']),
       f('campaign_name', 'Tên chiến dịch', 'Text', ['ten chien dich', 'campaign name', 'chien dich', 'campaign']),
-      f('cost', 'Chi phí quảng cáo', 'Money', ['chi phi', 'cost', 'spend', 'tong chi phi', 'chi tieu', 'total cost', 'chi phi quang cao', 'amount spent', 'chi phi thuc'], { req: 1 }),
-      f('revenue', 'Doanh thu gộp (báo cáo quảng cáo)', 'Money', ['doanh thu gop', 'gross revenue', 'tong doanh thu gop', 'gmv', 'doanh thu', 'revenue', 'total revenue', 'tong doanh thu'], { req: 1 }),
-      f('sku_orders', 'Số đơn SKU', 'Int', ['don hang sku', 'so don sku', 'sku orders', 'don sku', 'so don hang sku', 'orders sku', 'sku order', 'so luong don sku', 'luot dat hang sku'], { miss: 'Không tính được Số đơn SKU và Chi phí/đơn SKU' }),
+      f('cost', 'Chi phí quảng cáo', 'Money', ['chi phi', 'cost', 'spend', 'tong chi phi', 'chi tieu', 'total cost', 'chi phi quang cao', 'amount spent', 'chi phi thuc'], { req: 1, dz: 1 }),
+      f('revenue', 'Doanh thu gộp (báo cáo quảng cáo)', 'Money', ['doanh thu gop', 'gross revenue', 'tong doanh thu gop', 'gmv', 'doanh thu', 'revenue', 'total revenue', 'tong doanh thu'], { req: 1, dz: 1 }),
+      f('aff_cost', 'Chi phí liên kết gắn với quảng cáo (hoa hồng)', 'Money', ['chi phi lien ket', 'affiliate cost'], { dz: 1 }),
+      f('total_cost', 'Chi phí quảng cáo + liên kết', 'Money', ['chi phi quang cao va lien ket', 'cost ads and affiliate'], { dz: 1 }),
+      f('net_cost', 'Chi phí ròng', 'Money', ['chi phi rong', 'net cost'], { dz: 1 }),
+      f('coupon_cost', 'Chi phí phiếu giảm giá', 'Money', ['chi phi phieu giam gia'], { dz: 1 }),
+      f('roi_total', 'ROI quảng cáo + liên kết (file)', 'Num', ['roi quang cao va lien ket']),
+      f('sku_orders', 'Số đơn SKU', 'Int', ['don hang sku', 'so don sku', 'sku orders', 'don sku', 'so don hang sku', 'orders sku', 'sku order', 'so luong don sku', 'luot dat hang sku', 'so luong don hang sku'], { miss: 'Không tính được Số đơn SKU và Chi phí/đơn SKU', dz: 1 }),
       f('orders', 'Đơn hàng (theo file)', 'Int', ['don hang', 'orders', 'so don hang', 'so don']),
       f('roi_file', 'ROI/ROAS ghi trong file (đối chiếu)', 'Num', ['roi', 'roas']),
       f('currency', 'Tiền tệ', 'Text', ['tien te', 'currency', 'don vi tien te', 'loai tien te']),
@@ -139,6 +147,17 @@
       f('settlement_amount', 'Tổng tiền quyết toán', 'Money', ['total settlement amount', 'settlement amount', 'tong so tien quyet toan', 'so tien quyet toan', 'tong tien quyet toan'], { req: 1 }),
       f('revenue', 'Tổng doanh thu (file tài chính)', 'Money', ['total revenue', 'tong doanh thu']), f('fees', 'Tổng phí', 'Money', ['total fees', 'tong phi']),
       f('related_order_id', 'Mã đơn liên quan', 'Text', ['related order id', 'ma don hang lien quan'])] });
+
+  ds({ key: 'booking', label: 'Booking nhà sáng tạo (KOL/KOC) – danh sách nội bộ', source: 'File Excel nội bộ của bộ phận Marketing (mỗi dòng một lần booking)',
+    desc: 'Phí booking trả cho nhà sáng tạo ngoài TikTok, kèm GMV ghi nhận (nếu có) để tính hiệu quả từng booking. Chỉ dùng tên/ID kênh TikTok, không ghi họ tên, CCCD, MST, địa chỉ cá nhân.',
+    dateField: 'date', signature: ['creator', 'fee'], keyFields: ['date', 'creator', 'content_type'], entityFields: ['creator'], totalLabelFields: ['creator', 'date'],
+    fields: [f('date', 'Ngày LIVE / đăng video', 'Date', ['ngay', 'ngay live', 'ngay dang', 'ngay booking', 'ngay len song', 'date'], { req: 1 }),
+      f('creator', 'Kênh nhà sáng tạo (ID / tên kênh TikTok)', 'Text', ['kenh', 'ten kenh', 'id kenh', 'kenh tiktok', 'id tiktok', 'kol', 'koc', 'kol koc', 'nha sang tao', 'creator', 'creator id', 'idol'], { req: 1 }),
+      f('content_type', 'Hình thức (LIVE / Video)', 'Text', ['hinh thuc', 'loai noi dung', 'noi dung', 'content type', 'loai booking']),
+      f('fee', 'Phí booking', 'Money', ['phi booking', 'chi phi booking', 'gia booking', 'phi', 'cast', 'cat xe', 'thu lao'], { req: 1, dz: 1 }),
+      f('gmv', 'GMV ghi nhận', 'Money', ['gmv', 'gmv ghi nhan', 'doanh so', 'doanh thu'], { dz: 1 }),
+      f('orders', 'Đơn hàng', 'Int', ['don hang', 'so don'], { dz: 1 }),
+      f('note', 'Ghi chú', 'Text', ['ghi chu', 'note'])] });
 
   // chuẩn hóa: thêm cột thông tin cá nhân để chủ động loại bỏ, tập tên đã bỏ dấu
   S.all.forEach(function (d) {

@@ -83,7 +83,7 @@
     return sec.rows.map(function (r) { var o = {}; for (var i = 0; i < c.length; i++) o[c[i]] = r[i]; return o; });
   };
   M.prepare = function (cube) {
-    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'vid', 'aff', 'shop'].forEach(function (k) { cube['_' + k] = M.table(cube[k]); });
+    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { cube['_' + k] = M.table(cube[k] || { cols: [], rows: [] }); });
     cube._shopName = {};
     (cube.shops || []).forEach(function (s) { cube._shopName[s.id] = s.name; });
     cube.thresholds = (cube.thresholds || [12, 13]).map(Number).sort(function (a, b) { return a - b; });
@@ -291,6 +291,63 @@
     o.commissionRate = o.gmv > 0 ? o.commission / o.gmv : null;
     o.refundRate = o.gmv > 0 ? o.refund / o.gmv : null;
     o.coverage = range(rows, 'from', 'to');
+    return o;
+  };
+
+  // ---------- Kiểm soát ads: đối chiếu chi phí theo nguồn, hiệu quả theo loại chiến dịch, kênh nội dung, nhà sáng tạo, thị trường ----------
+  M.isGmvMax = function (r) { return /gmv max/i.test(r.ctype || ''); };
+  M.adsControl = function (cube, f, ads, rec, shop, aff) {
+    var o = {}, gmvAcc = cube.gmvMaxAccount || '', rows = ads.rows;
+    var typeOf = function (r) { return r.ctype || (r.account ? 'Chiến dịch thường' : 'Không rõ loại chiến dịch'); };
+    var accOf = function (r) { return r.account || (M.isGmvMax(r) ? (gmvAcc || 'Tài khoản GMV Max (chưa khai báo tên)') : 'Không rõ tài khoản'); };
+    o.costFile = rec.acct.n ? rec.acct.amount : null; o.costFileCov = rec.acct.coverage; o.costFileExcluded = rec.acct.excluded.length;
+    o.campCov = ads.coverage;
+    var t = {};
+    rows.forEach(function (r) {
+      var k = typeOf(r), a = t[k] || (t[k] = { type: k, gmvMax: M.isGmvMax(r), cost: 0, rev: 0, sku: 0, skuMissing: 0, aff: 0, affRows: 0, n: 0 });
+      a.cost += r.cost || 0; a.rev += r.rev || 0; if (r.sku == null) a.skuMissing++; else a.sku += r.sku; if (typeof r.affCost === 'number') { a.aff += r.affCost; a.affRows++; } a.n++;
+    });
+    o.byType = Object.keys(t).map(function (k) {
+      var a = t[k]; a.roas = M.roas(a.cost, a.rev); a.roasAll = a.affRows ? M.roas(a.cost + a.aff, a.rev) : null; a.cpo = a.skuMissing ? null : M.cpo(a.cost, a.sku); return a;
+    }).sort(function (x, y) { return y.cost - x.cost; });
+    o.campCost = sum(rows, 'cost'); o.campRev = sum(rows, 'rev'); o.roasCamp = M.roas(o.campCost, o.campRev);
+    var g = o.byType.filter(function (a) { return a.gmvMax; });
+    o.gmv = { cost: sum(g, 'cost'), rev: sum(g, 'rev'), aff: sum(g, 'aff'), affKnown: g.some(function (a) { return a.affRows > 0; }) };
+    o.gmv.roas = M.roas(o.gmv.cost, o.gmv.rev);
+    // chỉ tính trên loại chiến dịch có cột hoa hồng (file LIVE GMV Max không có cột này) – không trộn doanh thu thiếu chi phí hoa hồng
+    var gA = g.filter(function (a) { return a.affRows > 0; });
+    o.gmv.roasAll = gA.length ? M.roas(sum(gA, 'cost') + sum(gA, 'aff'), sum(gA, 'rev')) : null;
+    o.gmv.roasAllScope = gA.map(function (a) { return a.type; }).join(', ');
+    var reg = o.byType.filter(function (a) { return !a.gmvMax; });
+    o.reg = { cost: sum(reg, 'cost'), rev: sum(reg, 'rev') }; o.reg.roas = M.roas(o.reg.cost, o.reg.rev);
+    // đối chiếu theo tài khoản quảng cáo
+    var acc = {};
+    rec.acct.rows.forEach(function (r) { var k = r.accountName || r.accountId; var a = acc[k] || (acc[k] = { account: k, id: r.accountId, file: 0, gmv: 0, other: 0 }); a.file += r.amount || 0; });
+    rows.forEach(function (r) { var k = accOf(r); var a = acc[k] || (acc[k] = { account: k, id: '', file: null, gmv: 0, other: 0 }); if (M.isGmvMax(r)) a.gmv += r.cost || 0; else a.other += r.cost || 0; });
+    o.byAccount = Object.keys(acc).map(function (k) { var a = acc[k]; a.camp = a.gmv + a.other; a.gap = a.file == null ? null : a.file - a.camp; return a; })
+      .sort(function (x, y) { return (y.file || 0) - (x.file || 0); });
+    o.uncovered = o.costFile != null ? o.byAccount.reduce(function (s, a) { return s + (a.gap > 0 ? a.gap : 0); }, 0) : null;
+    o.uncoveredShare = o.costFile > 0 ? o.uncovered / o.costFile : null;
+    o.gmvAccountSet = !!gmvAcc;
+    // doanh số theo kênh nội dung (Phân tích shop)
+    o.shop = shop;
+    if (shop.n) {
+      o.ch = { live: shop.chSellerLive + shop.chCreatorLive, video: shop.chSellerVideo + shop.chCreatorVideo, card: shop.chProductCard,
+        creator: shop.chCreatorLive + shop.chCreatorVideo, seller: shop.chSellerLive + shop.chSellerVideo };
+    }
+    // chi phí quảng cáo so với GMV toàn shop – chỉ khi hai nguồn cùng kỳ
+    o.sameCostShop = !!(o.costFileCov && shop.coverage && o.costFileCov.from === shop.coverage.from && o.costFileCov.to === shop.coverage.to);
+    o.costToGmv = o.costFile != null && shop.gmv > 0 ? o.costFile / shop.gmv : null;
+    o.gmvRevShare = shop.gmv > 0 && o.gmv.rev > 0 ? o.gmv.rev / shop.gmv : null;
+    // nhà sáng tạo: liên kết (TikTok) + booking (nội bộ)
+    o.aff = aff;
+    var bk = (cube._booking || []).filter(byShop(f)).filter(function (r) { return r.date >= f.from && r.date <= f.to; });
+    var bc = {};
+    bk.forEach(function (r) { var a = bc[r.creator] || (bc[r.creator] = { creator: r.creator, n: 0, fee: 0, gmv: 0, gmvRows: 0, orders: 0, types: {} }); a.n++; a.fee += r.fee || 0; if (typeof r.gmv === 'number') { a.gmv += r.gmv; a.gmvRows++; } a.orders += r.orders || 0; if (r.ctype) a.types[r.ctype] = 1; });
+    o.booking = { n: bk.length, fee: sum(bk, 'fee'), gmv: sum(bk, 'gmv'), gmvRows: bk.filter(function (r) { return typeof r.gmv === 'number'; }).length, coverage: range(bk, 'date'),
+      byCreator: Object.keys(bc).map(function (k) { var a = bc[k]; a.roi = a.gmvRows ? M.roas(a.fee, a.gmv) : null; return a; }).sort(function (x, y) { return y.fee - x.fee; }) };
+    o.booking.roi = o.booking.gmvRows ? M.roas(o.booking.fee, o.booking.gmv) : null;
+    o.market = (cube.market || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
     return o;
   };
 

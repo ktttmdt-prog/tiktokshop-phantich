@@ -1,6 +1,6 @@
 /* Cho phép trang chạy khi mất mạng: lưu sẵn mã nguồn của trang (không lưu dữ liệu kinh doanh – dữ liệu nằm trong IndexedDB của trình duyệt). */
-var CACHE = 'tts-web-v1';
-var FILES = ['./', 'index.html', 'app.css', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'huong_dan.html', 'kiem_thu.html',
+var CACHE = 'tts-web-v3';
+var FILES = ['./', 'index.html', 'app.css', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'huong_dan.html', 'huong_dan_xuat_du_lieu.html', 'kiem_thu.html',
   'js/core.js', 'js/schema.js', 'js/store.js', 'js/importer.js', 'js/cube.js', 'js/excel.js', 'js/excel-report.js', 'js/secure.js',
   'js/metrics.js', 'js/charts.js', 'js/views.js', 'js/viewer.js', 'js/app.js'];
 

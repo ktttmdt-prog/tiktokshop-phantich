@@ -2,7 +2,9 @@
 (function (root) {
   'use strict';
   var K = root.TTSK, SC = root.TTSS, D = root.TTSD, I = {};
-  var TOTAL = { 'tong': 1, 'tong cong': 1, 'total': 1, 'grand total': 1, 'cong': 1, 'sum': 1, 'tong so': 1, 'tat ca': 1 };
+  var TOTAL_SET = { 'tong': 1, 'tong cong': 1, 'total': 1, 'grand total': 1, 'cong': 1, 'sum': 1, 'tong so': 1, 'tat ca': 1 };
+  // nhận cả dạng “Tổng 239 kết quả” / “Total 12 results” (báo cáo tùy chỉnh của Ads Manager)
+  var TOTAL = new Proxy(TOTAL_SET, { get: function (t, k) { return typeof k === 'string' && (t[k] || /^(tong|total)( cong)? \d+ (ket qua|results?|dong|rows?)$/.test(k)) ? 1 : undefined; } });
   var COVERAGE = { ads_campaign: 1, ads_account_cost: 1, affiliate_period: 1, video_daily: 1, shop_daily: 1 };
   var uploads = {}, pendings = {};
   function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -17,10 +19,15 @@
 
   function matchHeader(ds, row) {
     var map = {}, used = {}, score = 0;
-    for (var c = 0; c < row.length; c++) {
-      var h = K.norm(row[c]); if (!h) continue;
-      for (var i = 0; i < ds.fields.length; i++) { var f = ds.fields[i]; if (used[f.key]) continue; if (f.normSyn[h]) { map[c] = f.key; used[f.key] = 1; if (!f.pii) score++; break; } }
-    }
+    // lượt 1: khớp nguyên tên cột kể cả phần trong ngoặc (vd “Chi phí (liên kết)” khác “Chi phí”); lượt 2: bỏ phần trong ngoặc
+    [false, true].forEach(function (drop) {
+      for (var c = 0; c < row.length; c++) {
+        if (map[c] != null) continue;
+        var h = K.norm(row[c], drop); if (!h) continue;
+        if (!drop && h === K.norm(row[c])) continue; // tên cột không có ngoặc → để lượt 2 xử lý theo thứ tự cột
+        for (var i = 0; i < ds.fields.length; i++) { var f = ds.fields[i]; if (used[f.key]) continue; if (f.normSyn[h]) { map[c] = f.key; used[f.key] = 1; if (!f.pii) score++; break; } }
+      }
+    });
     return { map: map, score: score, sig: ds.signature.every(function (k) { return used[k]; }) };
   }
   function detect(sh, forceDs) {
@@ -153,6 +160,12 @@
     }
     var today = K.today(), recs = [], errors = [], skipBlank = 0, skipDesc = 0, skipTotal = 0, nErr = 0, totals = {}, firstRow = {}, occ = {}, newShops = [], minD = null, maxD = null, currencies = {}, sci = 0;
     var addFields = ds.stored.filter(function (x) { return (x.type === 'Money' || x.type === 'Int') && !x.nonAdd; });
+    // file GMV Max xuất từ Seller Center không có cột loại chiến dịch → lấy theo tên file
+    var ctypeFromName = null;
+    if (ds.key === 'ads_campaign' && !mapped.campaign_type) {
+      if (/^live campaign data/i.test(up.fileName)) ctypeFromName = 'LIVE GMV Max'; else if (/^product campaign data/i.test(up.fileName)) ctypeFromName = 'Product GMV Max';
+      if (ctypeFromName) notes.push('Loại chiến dịch lấy theo tên file: ' + ctypeFromName + '.');
+    }
     // bảng "Tổng giá trị" phía trên dòng tiêu đề (vd Phân tích shop)
     for (var tr = 1; tr < headerRow && tr < sh.rows.length; tr++) {
       var trow = sh.rows[tr]; if (!trow.length) continue;
@@ -176,7 +189,10 @@
       Object.keys(map).forEach(function (c) {
         var fd = ds.F[map[c]], raw = row[c] == null ? '' : String(row[c]).trim();
         if (fd.pii) { if (fd.key === 'description' && ds.F.pay_method) v.pay_method = payMethod(raw); return; }
-        if (!raw || raw === '-' || raw === '--') { if (fd.required) rowErr.push('thiếu “' + fd.label + '”'); return; }
+        if (!raw || raw === '-' || raw === '--') {
+          if (fd.dashZero && raw) { v[fd.key] = 0; return; } // “-” trong báo cáo TikTok = không phát sinh
+          if (fd.required) rowErr.push('thiếu “' + fd.label + '”'); return;
+        }
         if (fd.type === 'Text') {
           if (sh.isNum(r, +c) && /e/i.test(raw) && isFinite(Number(raw))) { raw = BigInt(Math.round(Number(raw))).toString(); sci++; }
           v[fd.key] = raw;
@@ -203,7 +219,9 @@
         var cur = String(row[colOf.currency]).trim().toUpperCase(); currencies[cur] = 1;
         if (cur !== 'VND' && cur !== '₫' && cur !== 'VNĐ') rowErr.push('tiền tệ “' + row[colOf.currency] + '” không phải VND (không quy đổi tỷ giá)');
       }
+      if (dayLevel && !v[ds.dateField] && !rowErr.length) rowErr.push('thiếu “' + ds.F[ds.dateField].label + '”');
       if (rowErr.length) { nErr++; if (errors.length < 200) errors.push({ row: rowNo, msg: rowErr.join('; ') }); continue; }
+      if (ctypeFromName && !v.campaign_type) v.campaign_type = ctypeFromName;
       var p = { row: rowNo, v: v, scope: scope };
       if (shopCol && v.shop_name) { var sid = D.findShop(v.shop_name); if (!sid) { sid = 'NEW:' + v.shop_name.trim(); } p.shop = sid; } else p.shop = shopId;
       if (p.shop.indexOf('NEW:') === 0 && newShops.indexOf(p.shop.slice(4)) < 0) newShops.push(p.shop.slice(4));

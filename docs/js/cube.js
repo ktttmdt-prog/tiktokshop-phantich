@@ -63,8 +63,12 @@
     var today = K.today(), o = { generatedAt: K.nowStr(), today: today, shops: D.settings.shops, thresholds: D.settings.thresholds, official: D.settings.official };
     var impCat = {}; D.imports.forEach(function (i) { impCat[i.id] = i.category; });
     var part = function (r) { return (r.partial || r.to >= today) ? 1 : 0; };
-    o.ads = { cols: ['shop', 'from', 'to', 'ent', 'name', 'cost', 'rev', 'sku', 'partial', 'imp', 'roiFile'],
-      rows: active('ads_campaign').map(function (r) { return [r.shop, r.from, r.to, r.ent, r.v.campaign_name || r.v.campaign_id || '(Toàn shop – không có chiến dịch)', n(r.v.cost), n(r.v.revenue), nv(r.v.sku_orders), part(r), r.imp, nv(r.v.roi_file)]; }) };
+    o.ads = { cols: ['shop', 'from', 'to', 'ent', 'name', 'cost', 'rev', 'sku', 'partial', 'imp', 'roiFile', 'account', 'ctype', 'affCost', 'totalCost'],
+      rows: active('ads_campaign').map(function (r) { return [r.shop, r.from, r.to, r.ent, r.v.campaign_name || r.v.campaign_id || '(Toàn shop – không có chiến dịch)', n(r.v.cost), n(r.v.revenue), nv(r.v.sku_orders), part(r), r.imp, nv(r.v.roi_file), r.v.account_name || null, r.v.campaign_type || null, nv(r.v.aff_cost), nv(r.v.total_cost)]; }) };
+    o.booking = { cols: ['shop', 'date', 'creator', 'ctype', 'fee', 'gmv', 'orders', 'partial', 'imp'],
+      rows: active('booking').map(function (r) { return [r.shop, r.from, r.v.creator, r.v.content_type || null, n(r.v.fee), nv(r.v.gmv), nv(r.v.orders), part(r), r.imp]; }) };
+    o.market = (D.settings.market || []).slice();
+    o.gmvMaxAccount = D.settings.gmvMaxAccount || '';
     o.acct = { cols: ['shop', 'from', 'to', 'accountId', 'accountName', 'type', 'cash', 'credit', 'adCredit', 'amount', 'tax', 'imp', 'partial'],
       rows: active('ads_account_cost').map(function (r) { var v = r.v; return [r.shop, r.from, r.to, v.account_id, v.account_name, v.cost_type, nv(v.cash), nv(v.credit), nv(v.ad_credit), n(v.amount), nv(v.tax), r.imp, part(r)]; }) };
     o.topup = { cols: ['shop', 'date', 'time', 'accountId', 'accountName', 'type', 'subtype', 'status', 'moneyType', 'amount', 'voucher', 'imp', 'cls', 'pay', 'ok'],

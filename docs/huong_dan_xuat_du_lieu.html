@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quy trình tải dữ liệu TikTok và nhập vào ứng dụng</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;max-width:920px;margin:0 auto;padding:16px 18px 60px;line-height:1.55;color:#0b0b0b;background:#fcfcfb;font-size:15px}
+h1{font-size:24px;margin:8px 0 4px}h2{font-size:19px;margin:30px 0 8px;border-bottom:1px solid #e1e0d9;padding-bottom:4px}h3{font-size:16px;margin:18px 0 6px}
+code,kbd{background:#f0efec;border-radius:4px;padding:1px 5px;font-size:13px}
+b.btn{display:inline-block;border:1px solid #c3c2b7;border-radius:6px;padding:0 6px;background:#fff;font-weight:600;font-size:14px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}th,td{border:1px solid #e1e0d9;padding:6px 8px;text-align:left;vertical-align:top}th{background:#f0efec}
+.tw{overflow-x:auto}
+.box{background:#fff8e6;border-left:4px solid #fab219;padding:8px 12px;margin:10px 0}.ok{background:#eaf7ea;border-left:4px solid #0ca30c;padding:8px 12px;margin:10px 0}
+.bad{background:#fdecec;border-left:4px solid #d03b3b;padding:8px 12px;margin:10px 0}
+ol.steps>li{margin:7px 0}ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
+.check{list-style:none;padding-left:4px}.check li::before{content:"☐ ";font-size:16px}
+@media print{body{max-width:none;padding:0;font-size:13px}h2{break-after:avoid}table,.box,.ok,.bad{break-inside:avoid}a{color:inherit;text-decoration:none}}
+@media (prefers-color-scheme:dark){body{background:#1a1a19;color:#f0efec}th{background:#2c2c2a}th,td{border-color:#383835}code,kbd{background:#2c2c2a}b.btn{background:#2c2c2a;border-color:#52514e}.box{background:#3a3014}.ok{background:#16301a}.bad{background:#3a1a1a}.muted{color:#c3c2b7}}
+</style>
+</head>
+<body>
+<h1>Quy trình tải dữ liệu TikTok và nhập vào ứng dụng</h1>
+<p class="muted">Dành cho kế toán và nhân sự tải dữ liệu. In được (Ctrl + P). <a href="./">← Ứng dụng</a> · <a href="huong_dan.html">Hướng dẫn sử dụng chung</a></p>
+
+<h2>1. Lịch làm việc</h2>
+<div class="tw"><table>
+<tr><th>Khi nào</th><th>Tải gì</th><th>Khoảng ngày chọn trên TikTok</th><th>Kỳ nhập vào ứng dụng</th></tr>
+<tr><td>Hằng tuần, hoặc trước mỗi lần báo cáo</td><td>Chi phí quảng cáo (Cost) và Giao dịch thanh toán – <b>mỗi Business Center một lần</b></td><td><b>Tháng này</b></td><td>Cost: ngày 1 đầu tháng → ngày tải. Giao dịch: để trống</td></tr>
+<tr><td>Ngày 1–3 tháng sau (chốt tháng)</td><td>Cost, Giao dịch của tháng vừa qua; Phân tích shop; Video; Liên kết; Đơn hàng; Quyết toán; Hóa đơn</td><td><b>Tháng trước</b></td><td>Cost: trọn tháng trước. Các file khác: tự lấy kỳ trong file</td></tr>
+</table></div>
+
+<h2>2. Chuẩn bị (làm một lần)</h2>
+<ul>
+<li>Tạo thư mục lưu file theo tháng, ví dụ <code>ADS\T11</code>, <code>ADS\T12</code>. Mọi file tải về trong tháng lưu vào đúng thư mục đó.</li>
+<li>Chrome trên máy được cài <b>hỏi nơi lưu trước mỗi lần tải</b>: sau mỗi lần bấm Xuất sẽ hiện cửa sổ “Lưu dưới dạng” → chọn thư mục tháng → <b>giữ nguyên tên file</b> → bấm Lưu.</li>
+<li><b>Không mở rồi lưu lại file bằng Excel</b> trước khi nhập: Excel có thể làm hỏng mã giao dịch dài. Muốn xem thì mở xong đóng, chọn “Không lưu”.</li>
+<li>Đăng nhập TikTok Business Center bằng tài khoản có quyền xem mục Tài chính.</li>
+</ul>
+
+<h2>3. Tải file Chi phí quảng cáo (Cost)</h2>
+<ol class="steps">
+<li>Mở <a href="https://business.tiktok.com/" target="_blank" rel="noopener">business.tiktok.com</a> → menu bên trái <b>Tài chính</b> → <b>Giao dịch</b>.</li>
+<li>Kiểm tra tên Business Center ở góc trên bên phải. Nếu có nhiều BC, bấm vào tên đó để chuyển BC.</li>
+<li>Chọn tab <b>Chi phí</b> (cạnh tab Giao dịch).</li>
+<li>Bấm vào ô khoảng ngày ở góc phải (dạng <code>26 thg 8, 2026 – 26 thg 11, 2026</code>) → chọn <b>Tháng này</b> (hoặc <b>Tháng trước</b> khi chốt tháng) → bấm <b class="btn">Xác nhận</b>.
+<div class="bad"><b>Bắt buộc chọn lại khoảng ngày.</b> Mặc định TikTok hiển thị <b>3 tháng gần nhất</b>, trong khi file Cost tải về <b>không ghi kỳ</b>. Xuất mà không chọn lại thì chi phí của 3 tháng sẽ bị hiểu thành chi phí một tháng.</div></li>
+<li><b>Ghi lại số “Tổng”</b> ở cuối bảng (TikTok hiển thị số âm, ví dụ <code>-123.456.789 VND</code>) để đối chiếu sau khi nhập.</li>
+<li>Bấm <b class="btn">Xuất</b> → góc trên hiện “Xuất thành công” → cửa sổ lưu file hiện ra → chọn thư mục tháng → Lưu. File có tên dạng <code>Cost_&lt;mã BC&gt;_&lt;ngày giờ&gt;.xlsx</code>.</li>
+</ol>
+
+<h2>4. Tải file Giao dịch thanh toán (Transaction)</h2>
+<ol class="steps">
+<li>Cùng trang, chọn tab <b>Giao dịch</b>.</li>
+<li>Kiểm tra khoảng ngày (thường giữ nguyên lựa chọn ở bước 3). Để <b>tắt</b> công tắc “Tóm tắt theo tài khoản” để file có từng giao dịch.</li>
+<li>Bấm <b class="btn">Xuất</b> → Lưu vào thư mục tháng. File có tên dạng <code>Transaction_&lt;mã BC&gt;_&lt;ngày giờ&gt;.xlsx</code>.</li>
+</ol>
+<p class="muted">Với file Giao dịch, khoảng ngày chọn rộng hơn cũng không sao: ứng dụng nhận ra giao dịch đã có theo mã giao dịch và tự bỏ qua.</p>
+
+<h2>5. Lặp lại cho Business Center còn lại</h2>
+<p>Chuyển sang BC khác (tên công ty ở góc trên bên phải) và làm lại mục 3 và 4. Hiện có <b>2 Business Center</b> nên mỗi lần tải sẽ có <b>4 file</b>: 2 file Cost và 2 file Transaction.</p>
+
+<h2>6. Nhập vào ứng dụng</h2>
+<p>Mở ứng dụng (lối tắt <b>Phân tích TikTok Shop</b> trên màn hình nền) → tab <b>Nhập dữ liệu</b> → ô <b>Shop</b> chọn đúng shop.</p>
+<h3>6.1. File Cost</h3>
+<ol class="steps">
+<li>Điền <b>Kỳ dữ liệu – từ / đến</b> đúng khoảng ngày đã chọn trên TikTok (ví dụ 01/11/2026 → ngày tải; chốt tháng thì 01 → ngày cuối tháng).</li>
+<li>Bấm <b>Chọn tệp</b> → chọn cả 2 file Cost vừa tải.</li>
+<li>Mỗi file hiện một thẻ xem trước. Kiểm tra: loại file “Chi phí quảng cáo theo tài khoản (file Cost)”, kỳ đúng, mục “Đối chiếu với dòng Tổng” báo <b>khớp</b>, 0 dòng lỗi.</li>
+<li>Nếu đã nhập file Cost trước đó trong tháng, thẻ báo <b>Chồng lấn kỳ</b> → tích ô <b>“Thay thế dữ liệu cũ bị chồng lấn”</b> → bấm <b class="btn">Ghi nhận</b>. Số mới thay số cũ, không cộng dồn; số cũ vẫn giữ trong lịch sử.</li>
+</ol>
+<div class="box">Quên tích ô “Thay thế” thì dòng chồng lấn bị bỏ qua, chi phí vẫn là số cũ. Khi đó vào <b>Lịch sử nhập</b>, hủy lần nhập vừa rồi và nhập lại.</div>
+<h3>6.2. File Giao dịch</h3>
+<ol class="steps">
+<li><b>Xóa trống</b> hai ô Kỳ dữ liệu (file Giao dịch có sẵn ngày).</li>
+<li>Chọn cả 2 file Transaction → kiểm tra thẻ: số <b>mới</b> là giao dịch phát sinh thêm, số <b>trùng</b> là giao dịch đã có (bị bỏ qua) → <b class="btn">Ghi nhận</b>.</li>
+</ol>
+<h3>6.3. Các file khác (khi chốt tháng)</h3>
+<div class="tw"><table>
+<tr><th>File</th><th>Nơi tải</th><th>Lưu ý khi nhập</th></tr>
+<tr><td><code>Shop Analytics_Key metrics_….xlsx</code></td><td>Seller Center → Phân tích → Chỉ số chính, chọn trọn tháng → Xuất</td><td>Kỳ tự lấy trong file. Kiểm tra dòng “Kỳ dữ liệu” đúng tháng cần (file có thể đặt tên một tháng nhưng chứa số tháng khác – ứng dụng sẽ cảnh báo)</td></tr>
+<tr><td><code>Video performance Key metrics_….xlsx</code></td><td>Seller Center → Phân tích → Video</td><td>Ghi <b>Phạm vi</b> trước khi chọn file (vd “Tất cả kênh”, “Kênh TK không chạy ads”)</td></tr>
+<tr><td><code>Transaction_Analysis_Core_Metrics_&lt;từ&gt;-&lt;đến&gt;.xlsx</code></td><td>Seller Center → Tiếp thị liên kết → Phân tích</td><td>Kỳ lấy từ tên file</td></tr>
+<tr><td>File đơn hàng</td><td>Seller Center → Đơn hàng → Xuất</td><td>Kỳ theo ngày tạo đơn; không lưu tên, SĐT, địa chỉ người mua</td></tr>
+<tr><td>File quyết toán / thu nhập</td><td>Seller Center → Tài chính → Sao kê</td><td>Theo ngày quyết toán</td></tr>
+<tr><td><code>invoice_&lt;số&gt;_detail.xlsx</code></td><td>Hóa đơn → Tải chi tiết</td><td>Điền kỳ (tháng của hóa đơn) và chọn <b>Nhóm hóa đơn</b></td></tr>
+</table></div>
+
+<h2>7. Kiểm tra sau khi nhập</h2>
+<ul class="check">
+<li>Tab <b>Kiểm soát kế toán</b>, kỳ lọc là tháng đang làm → dòng “File Cost theo tài khoản quảng cáo” bằng <b>tổng các số “Tổng” đã ghi ở mục 3</b> (bỏ dấu âm), cộng tất cả BC.</li>
+<li>Thuế ước tính bằng tổng cột “Thuế ước tính” trên TikTok.</li>
+<li>“Tiền thực trả TikTok Ads” = nạp tiền + trả hóa đơn bằng thẻ; đối chiếu với sao kê thẻ/ngân hàng và hóa đơn VNTT tải ở Business Center → Tài chính → Hóa đơn.</li>
+<li>Bảng giao dịch: khoản thanh toán hóa đơn có số chứng từ “-999” hoặc “N/A” cần tìm hóa đơn tương ứng.</li>
+<li>Tab <b>Lịch sử nhập</b>: mỗi file một dòng, không có dòng lỗi.</li>
+<li>Vào <b>Chia sẻ, sao lưu &amp; cài đặt</b> → <b class="btn">Tải bản sao lưu (.ttsbak)</b> → chép thêm một bản sang ổ khác/USB.</li>
+</ul>
+
+<h2>8. Lỗi thường gặp</h2>
+<div class="tw"><table>
+<tr><th>Hiện tượng</th><th>Nguyên nhân</th><th>Cách xử lý</th></tr>
+<tr><td>Chi phí trong ứng dụng lớn bất thường</td><td>Xuất file Cost khi khoảng ngày còn để mặc định 3 tháng</td><td>Lịch sử nhập → hủy lần nhập file đó → tải lại với “Tháng này/Tháng trước” → nhập lại</td></tr>
+<tr><td>Bấm Xuất nhưng không thấy file</td><td>Cửa sổ “Lưu dưới dạng” bị che sau cửa sổ khác, hoặc file đã vào thư mục Tải xuống</td><td>Tìm cửa sổ lưu trên thanh tác vụ; hoặc mở biểu tượng tải xuống của Chrome (góc trên bên phải)</td></tr>
+<tr><td>Thẻ xem trước báo “Chưa đủ dữ liệu: file không ghi kỳ”</td><td>File Cost/hóa đơn chưa có kỳ</td><td>Điền Kỳ dữ liệu – từ/đến rồi bấm “Xem trước lại”</td></tr>
+<tr><td>Thẻ báo “Chồng lấn kỳ” với file Giao dịch hoặc Video</td><td>Đang điền kỳ thủ công cho file có sẵn ngày</td><td>Xóa trống ô Kỳ dữ liệu, bấm “Xem trước lại”</td></tr>
+<tr><td>Cảnh báo “ID lưu dạng số khoa học”</td><td>File đã bị mở và lưu lại bằng Excel</td><td>Dùng file gốc tải từ TikTok</td></tr>
+</table></div>
+</body>
+</html>
