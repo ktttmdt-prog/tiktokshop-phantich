@@ -83,7 +83,7 @@
     return sec.rows.map(function (r) { var o = {}; for (var i = 0; i < c.length; i++) o[c[i]] = r[i]; return o; });
   };
   M.prepare = function (cube) {
-    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { cube['_' + k] = M.table(cube[k] || { cols: [], rows: [] }); });
+    ['ads', 'acct', 'topup', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking', 'vlist', 'llist'].forEach(function (k) { cube['_' + k] = M.table(cube[k] || { cols: [], rows: [] }); });
     cube._shopName = {};
     (cube.shops || []).forEach(function (s) { cube._shopName[s.id] = s.name; });
     cube.thresholds = (cube.thresholds || [12, 13]).map(Number).sort(function (a, b) { return a - b; });
@@ -419,7 +419,7 @@
   ];
   M.shop = function (cube, f) {
     var rows = (cube._shop || []).filter(byShop(f)).filter(function (r) { return r.date >= f.from && r.date <= f.to; });
-    var keys = ['gmv', 'orders', 'sku', 'items', 'refund', 'totalRevenue', 'pageViews', 'impr', 'clicks'].concat(M.CHANNELS.map(function (c) { return c.k; }));
+    var keys = ['gmv', 'orders', 'sku', 'items', 'refund', 'totalRevenue', 'pageViews', 'impr', 'clicks', 'visitors'].concat(M.CHANNELS.map(function (c) { return c.k; }));
     var o = { n: rows.length, coverage: range(rows, 'date'), partial: rows.some(function (r) { return r.partial; }) };
     keys.forEach(function (k) { o[k] = sum(rows, k); });
     o.aov = o.orders > 0 ? o.gmv / o.orders : null;
@@ -440,6 +440,120 @@
     o.byMonth = Object.keys(mon).sort().map(function (k) { var m = mon[k]; m.nDays = Object.keys(m.days).length; m.aov = m.orders > 0 ? m.gmv / m.orders : null; m.skuPerOrder = m.orders > 0 ? m.sku / m.orders : null; return m; });
     return o;
   };
+
+  // ---------- Cây chỉ số: so với kỳ trước, phân rã nguyên nhân, năng suất video/LIVE ----------
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function ymdU(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+  function addDays(s, n) { var d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return ymdU(d); }
+  function monthEnd(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }), h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; }
+  function dayCount(a, b) { return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 864e5) + 1; }
+  /* Kỳ so sánh: kỳ lọc bắt đầu ngày 1 → cùng số tháng liền trước; còn lại → cùng số ngày liền trước */
+  M.prevPeriod = function (from, to) {
+    var a = from.split('-').map(Number), b = to.split('-').map(Number);
+    if (a[2] === 1) {
+      var months = (b[0] - a[0]) * 12 + (b[1] - a[1]) + 1, pm = a[1] - months, py = a[0];
+      while (pm < 1) { pm += 12; py--; }
+      var em = pm + months - 1, ey = py; while (em > 12) { em -= 12; ey++; }
+      return { from: py + '-' + pad(pm) + '-01', to: ey + '-' + pad(em) + '-' + pad(monthEnd(ey, em)) };
+    }
+    var n = dayCount(from, to);
+    return { from: addDays(from, -n), to: addDays(from, -1) };
+  };
+  M.videoList = function (cube, f) {
+    var ex = [], rows = (cube._vlist || []).filter(byShop(f)).filter(function (r) { return incl(r, f, ex); });
+    var o = { n: rows.length, excluded: ex, coverage: range(rows, 'from', 'to'), scopes: {} };
+    var per = {}; rows.forEach(function (r) { per[r.from + '~' + r.to] = 1; });
+    o.nDays = 0; var seen = {}; Object.keys(per).forEach(function (k) { var p = k.split('~'); for (var d = p[0]; d <= p[1]; d = addDays(d, 1)) { if (!seen[d]) { seen[d] = 1; o.nDays++; } } });
+    var ids = {}, newIds = {}, vvs = [], vvNew = [], cr = {};
+    o.vv = 0; o.impr = 0; o.clicks = 0; o.gmv = 0; o.sku = 0; o.withGmv = 0;
+    rows.forEach(function (r) {
+      o.vv += r.vv; o.impr += r.impr; o.clicks += r.clicks; o.gmv += r.gmv; o.sku += r.sku;
+      if (!ids[r.videoId]) { ids[r.videoId] = 1; vvs.push(r.vv); if (r.gmv > 0) o.withGmv++; }
+      var isNew = r.publish && r.publish.slice(0, 10) >= r.from && r.publish.slice(0, 10) <= r.to;
+      if (isNew && !newIds[r.videoId]) { newIds[r.videoId] = 1; vvNew.push(r.vv); }
+      var c = cr[r.creator || '(không rõ)'] || (cr[r.creator || '(không rõ)'] = { account: r.creator || '(không rõ)', scope: r.scope, videos: 0, newVideos: 0, vv: 0, clicks: 0, gmv: 0 });
+      c.videos++; if (isNew) c.newVideos++; c.vv += r.vv; c.clicks += r.clicks; c.gmv += r.gmv;
+    });
+    o.videos = vvs.length; o.newVideos = vvNew.length;
+    o.medianVV = median(vvs); o.medianVVNew = median(vvNew);
+    o.gpm = o.vv > 0 ? o.gmv / o.vv * 1000 : null; o.clicksPer1k = o.vv > 0 ? o.clicks / o.vv * 1000 : null;
+    o.newPerDay = o.nDays ? o.newVideos / o.nDays : null;
+    var g = rows.map(function (r) { return r.gmv; }).sort(function (x, y) { return y - x; }), top = Math.max(1, Math.ceil(g.length * 0.1)), topSum = 0;
+    for (var i = 0; i < top && i < g.length; i++) topSum += g[i];
+    o.top10Share = o.gmv > 0 ? topSum / o.gmv : null;
+    var bk = [[0, 1000, 'Dưới 1.000'], [1000, 10000, '1.000 – 10.000'], [10000, 100000, '10.000 – 100.000'], [100000, 1e15, 'Từ 100.000']];
+    o.buckets = bk.map(function (b) { var xs = rows.filter(function (r) { return r.vv >= b[0] && r.vv < b[1]; }); return { label: b[2], videos: xs.length, vv: sum(xs, 'vv'), gmv: sum(xs, 'gmv') }; });
+    o.byAccount = Object.keys(cr).map(function (k) { var c = cr[k]; c.gpm = c.vv > 0 ? c.gmv / c.vv * 1000 : null; return c; }).sort(function (x, y) { return y.gmv - x.gmv; });
+    return o;
+  };
+  var SLOTS = [[0, 6, '0h–6h'], [6, 9, '6h–9h'], [9, 12, '9h–12h'], [12, 14, '12h–14h'], [14, 17, '14h–17h'], [17, 19, '17h–19h'], [19, 21, '19h–21h'], [21, 24, '21h–24h']];
+  M.liveList = function (cube, f) {
+    var rows = (cube._llist || []).filter(byShop(f)).filter(function (r) { return r.date >= f.from && r.date <= f.to; });
+    var o = { n: rows.length, coverage: range(rows, 'date'), sessions: rows.length };
+    ['dur', 'gmv', 'orders', 'items', 'buyers', 'viewers', 'views', 'impr', 'clicks', 'comments', 'likes', 'followers'].forEach(function (k) { o[k] = sum(rows, k); });
+    var days = {}; rows.forEach(function (r) { days[r.date] = 1; }); o.nDays = Object.keys(days).length;
+    o.hours = o.dur / 60;
+    o.hoursPerSession = o.sessions ? o.hours / o.sessions : null;
+    o.gmvPerHour = o.hours > 0 ? o.gmv / o.hours : null; o.gmvPerSession = o.sessions ? o.gmv / o.sessions : null;
+    o.viewersPerHour = o.hours > 0 ? o.viewers / o.hours : null; o.imprPerHour = o.hours > 0 ? o.impr / o.hours : null;
+    o.ctr = o.impr > 0 ? o.clicks / o.impr : null; o.cvr = o.clicks > 0 ? o.orders / o.clicks : null; o.aov = o.orders > 0 ? o.gmv / o.orders : null;
+    var ac = {};
+    rows.forEach(function (r) { var a = ac[r.account] || (ac[r.account] = { account: r.account, sessions: 0, dur: 0, gmv: 0, viewers: 0, impr: 0, clicks: 0, orders: 0 }); a.sessions++; ['dur', 'gmv', 'viewers', 'impr', 'clicks', 'orders'].forEach(function (k) { a[k] += r[k] || 0; }); });
+    o.byAccount = Object.keys(ac).map(function (k) { var a = ac[k]; a.hours = a.dur / 60; a.gmvPerHour = a.hours > 0 ? a.gmv / a.hours : null; a.ctr = a.impr > 0 ? a.clicks / a.impr : null; a.cvr = a.clicks > 0 ? a.orders / a.clicks : null; return a; }).sort(function (x, y) { return y.gmv - x.gmv; });
+    o.bySlot = SLOTS.map(function (s) {
+      var xs = rows.filter(function (r) { var h = +String(r.start || '').slice(11, 13); return h >= s[0] && h < s[1]; });
+      var hrs = sum(xs, 'dur') / 60, g = sum(xs, 'gmv');
+      return { label: s[2], sessions: xs.length, hours: hrs, gmv: g, gmvPerHour: hrs > 0 ? g / hrs : null, viewersPerHour: hrs > 0 ? sum(xs, 'viewers') / hrs : null };
+    });
+    return o;
+  };
+  /* Phân rã logarit (LMDI): đóng góp cộng được của từng nhân tố vào chênh lệch tích số */
+  function lmdi(y0, y1, factors) {
+    var ok = y0 > 0 && y1 > 0 && factors.every(function (x) { return x.a > 0 && x.b > 0; });
+    if (!ok) return null;
+    var L = y0 === y1 ? y0 : (y1 - y0) / Math.log(y1 / y0);
+    return factors.map(function (x) { return { key: x.key, label: x.label, a: x.a, b: x.b, change: x.b / x.a - 1, impact: L * Math.log(x.b / x.a) }; });
+  }
+  function snap(cube, f) {
+    var s = M.shop(cube, f), v = M.video(cube, f), aff = M.affiliate(cube, f), vl = M.videoList(cube, f), ll = M.liveList(cube, f);
+    var d = s.byDay.length || 0, o = { from: f.from, to: f.to, days: d, shop: s, vl: vl, ll: ll, aff: aff };
+    var per = function (x) { return d > 0 ? x / d : null; };
+    o.gmvD = per(s.gmv); o.imprD = per(s.impr); o.clicksD = per(s.clicks); o.visitorsD = per(s.visitors); o.ordersD = per(s.orders);
+    o.ctr = s.impr > 0 ? s.clicks / s.impr : null; o.c2o = s.clicks > 0 ? s.orders / s.clicks : null; o.v2o = s.visitors > 0 ? s.orders / s.visitors : null; o.aov = s.aov;
+    o.ch = {}; s.channels.forEach(function (c) { o.ch[c.k] = per(c.value); });
+    var vs = (v.scopes || []).filter(function (x) { return x.scope === 'Tất cả kênh'; })[0] || (v.scopes || [])[0] || null, vd = vs ? vs.nDays : 0;
+    o.video = vs ? { days: vd, vvD: vd ? vs.vv / vd : null, gmvD: vd ? vs.gmv / vd : null, clicksD: vd ? vs.clicks / vd : null, gmvPerView: vs.vv > 0 ? vs.gmv / vs.vv : null, clicksPerView: vs.vv > 0 ? vs.clicks / vs.vv : null, gmvPerClick: vs.clicks > 0 ? vs.gmv / vs.clicks : null } : null;
+    o.liveD = ll.nDays ? { hoursD: ll.hours / ll.nDays, sessionsD: ll.sessions / ll.nDays, gmvD: ll.gmv / ll.nDays } : null;
+    return o;
+  }
+  M.growth = function (cube, f, norm) {
+    var p = M.prevPeriod(f.from, f.to), cur = snap(cube, f), prev = snap(cube, { from: p.from, to: p.to, shop: f.shop, ent: '' });
+    var o = { cur: cur, prev: prev, prevFrom: p.from, prevTo: p.to, hasCur: cur.days > 0, hasPrev: prev.days > 0 };
+    if (o.hasCur && o.hasPrev) {
+      o.funnel = lmdi(prev.gmvD, cur.gmvD, [{ key: 'impr', label: 'Lượt hiển thị sản phẩm / ngày', a: prev.imprD, b: cur.imprD }, { key: 'ctr', label: 'Tỷ lệ nhấp (nhấp ÷ hiển thị)', a: prev.ctr, b: cur.ctr },
+        { key: 'c2o', label: 'Tỷ lệ nhấp thành đơn', a: prev.c2o, b: cur.c2o }, { key: 'aov', label: 'Giá trị đơn bình quân', a: prev.aov, b: cur.aov }]);
+      o.gmvDelta = cur.gmvD - prev.gmvD;
+      o.channels = M.CHANNELS.map(function (c) { var a = prev.ch[c.k] || 0, b = cur.ch[c.k] || 0; return { label: c.label, a: a, b: b, delta: b - a, share: o.gmvDelta ? (b - a) / o.gmvDelta : null }; }).sort(function (x, y) { return x.delta - y.delta; });
+      if (cur.video && prev.video) o.videoFunnel = lmdi(prev.video.gmvD, cur.video.gmvD, [{ key: 'vv', label: 'Lượt xem video / ngày', a: prev.video.vvD, b: cur.video.vvD },
+        { key: 'cpv', label: 'Lượt nhấp sản phẩm trên mỗi lượt xem', a: prev.video.clicksPerView, b: cur.video.clicksPerView }, { key: 'gpc', label: 'GMV trên mỗi lượt nhấp', a: prev.video.gmvPerClick, b: cur.video.gmvPerClick }]);
+      var la = prev.ll, lb = cur.ll;
+      if (la.n && lb.n) o.liveFunnel = lmdi(la.gmv / la.nDays, lb.gmv / lb.nDays, [{ key: 'h', label: 'Giờ LIVE / ngày', a: la.hours / la.nDays, b: lb.hours / lb.nDays },
+        { key: 'iph', label: 'Lượt hiển thị sản phẩm / giờ', a: la.imprPerHour, b: lb.imprPerHour }, { key: 'ctr', label: 'CTR LIVE', a: la.ctr, b: lb.ctr },
+        { key: 'cvr', label: 'Nhấp thành đơn (LIVE)', a: la.cvr, b: lb.cvr }, { key: 'aov', label: 'Giá trị đơn LIVE', a: la.aov, b: lb.aov }]);
+    }
+    // định mức quy đổi theo kỳ hiện tại (thiếu thì lấy kỳ trước)
+    var pick = function (fn) { var x = fn(cur); return x != null && isFinite(x) && x > 0 ? x : (function () { var y = fn(prev); return y != null && isFinite(y) && y > 0 ? y : null; })(); };
+    o.norm = {
+      vvPerVideo: pick(function (s) { return s.vl.nDays >= 7 ? (s.vl.medianVVNew || s.vl.medianVV) : null; }) || norm || 20000,
+      vvPerVideoSrc: ((cur.vl.nDays >= 7 && (cur.vl.medianVVNew || cur.vl.medianVV)) || (prev.vl.nDays >= 7 && (prev.vl.medianVVNew || prev.vl.medianVV))) ? 'trung vị lượt xem của video mới đăng trong danh sách video' : 'định mức sàn ' + M.fmtNum(norm || 20000) + ' lượt xem/video theo quy chế; danh sách video cần phủ từ 7 ngày để tính theo thực tế',
+      gmvPerView: pick(function (s) { return s.video && s.video.gmvPerView; }), clicksPerView: pick(function (s) { return s.video && s.video.clicksPerView; }),
+      gmvPerClick: pick(function (s) { return s.video && s.video.gmvPerClick; }), v2o: pick(function (s) { return s.v2o; }), aov: pick(function (s) { return s.aov; }),
+      gmvPerHour: pick(function (s) { return s.ll.gmvPerHour; })
+    };
+    return o;
+  };
+  M.healthTargets = { late: 0.04, chat: 0.70 };
 
   function shopComments(ctx, out) {
     var sp = ctx.shop;

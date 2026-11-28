@@ -99,9 +99,16 @@
       rows: active('video_daily').map(function (r) { var v = r.v; return [r.shop, r.scope, r.from, nv(v.gmv_total), nv(v.gmv_direct), nv(v.gmv_indirect), nv(v.vv), nv(v.sku_orders), nv(v.sku_direct), nv(v.sku_indirect), nv(v.impressions), nv(v.clicks), nv(v.product_viewers), part(r), r.imp]; }) };
     o.aff = { cols: ['shop', 'from', 'to', 'gmv', 'items', 'refund', 'itemsRefunded', 'commission', 'videos', 'lives', 'samples', 'creators', 'ctr', 'ctor', 'aov', 'partial', 'imp'],
       rows: active('affiliate_period').map(function (r) { var v = r.v; return [r.shop, r.from, r.to, nv(v.gmv), nv(v.items_sold), nv(v.refund), nv(v.items_refunded), nv(v.commission), nv(v.videos), nv(v.lives), nv(v.samples_shipped), nv(v.creators), nv(v.ctr), nv(v.ctor), nv(v.aov), part(r), r.imp]; }) };
-    var sk = ['gmv', 'orders', 'sku_orders', 'items_sold', 'refund', 'total_revenue', 'page_views', 'impressions', 'clicks', 'gmv_creator_live', 'gmv_seller_live', 'gmv_product_card', 'gmv_creator_video', 'gmv_seller_video'];
-    o.shop = { cols: ['shop', 'date', 'gmv', 'orders', 'sku', 'items', 'refund', 'totalRevenue', 'pageViews', 'impr', 'clicks', 'chCreatorLive', 'chSellerLive', 'chProductCard', 'chCreatorVideo', 'chSellerVideo', 'partial', 'imp'],
+    var sk = ['gmv', 'orders', 'sku_orders', 'items_sold', 'refund', 'total_revenue', 'page_views', 'impressions', 'clicks', 'gmv_creator_live', 'gmv_seller_live', 'gmv_product_card', 'gmv_creator_video', 'gmv_seller_video', 'visitors'];
+    o.shop = { cols: ['shop', 'date', 'gmv', 'orders', 'sku', 'items', 'refund', 'totalRevenue', 'pageViews', 'impr', 'clicks', 'chCreatorLive', 'chSellerLive', 'chProductCard', 'chCreatorVideo', 'chSellerVideo', 'visitors', 'partial', 'imp'],
       rows: active('shop_daily').map(function (r) { return [r.shop, r.from].concat(sk.map(function (k) { return nv(r.v[k]); })).concat([part(r), r.imp]); }) };
+    // từng video theo kỳ (không lưu tên sản phẩm, nội dung video chỉ giữ 80 ký tự đầu)
+    o.vlist = { cols: ['shop', 'scope', 'from', 'to', 'videoId', 'creator', 'title', 'publish', 'vv', 'impr', 'clicks', 'sku', 'items', 'gmv', 'likes', 'comments', 'shares', 'followers', 'partial', 'imp'],
+      rows: active('video_list').map(function (r) { var v = r.v; return [r.shop, r.scope, r.from, r.to, v.video_id, v.creator || v.creator_id || '', (v.title || '').slice(0, 80), v.publish_time || null, n(v.vv), n(v.impressions), n(v.clicks), n(v.sku_orders), n(v.items), n(v.gmv), n(v.likes), n(v.comments), n(v.shares), n(v.followers), part(r), r.imp]; }) };
+    // từng phiên LIVE
+    o.llist = { cols: ['shop', 'scope', 'date', 'start', 'account', 'dur', 'gmv', 'gmvDirect', 'orders', 'items', 'buyers', 'viewers', 'views', 'avgWatch', 'impr', 'clicks', 'comments', 'likes', 'shares', 'followers', 'partial', 'imp'],
+      rows: active('live_list').map(function (r) { var v = r.v; return [r.shop, r.scope, r.from, v.start_time, v.handle || v.creator || v.creator_id || '', n(v.duration), n(v.gmv), nv(v.gmv_direct), n(v.orders), n(v.items), n(v.buyers), n(v.viewers), n(v.views), nv(v.avg_watch), n(v.impressions), n(v.clicks), n(v.comments), n(v.likes), n(v.shares), n(v.followers), part(r), r.imp]; }) };
+    o.health = (D.settings.health || []).slice();
     o.imports = D.imports.map(function (i) { return { id: i.id, time: i.time, user: i.user, fileName: i.fileName, dataset: i.dataset, datasetLabel: i.datasetLabel, shopName: i.shopName, scope: i.scope, from: i.from, to: i.to, 'new': i['new'], dup: i.dup, update: i.update, conflict: i.conflict, replaced: i.replaced, error: i.error, rolledBack: i.rolledBack }; });
     return o;
   };

@@ -622,5 +622,181 @@
     return sheets;
   };
 
+  // ---------- CÂY CHỈ SỐ: doanh số tăng/giảm ở đâu, cần bù bao nhiêu ----------
+  function chg(a, b) { return a > 0 && b != null ? b / a - 1 : null; }
+  function chgCell(a, b, ratio) {
+    if (a == null || b == null || !isFinite(a) || !isFinite(b)) return '—';
+    if (ratio) { var d = (b - a) * 100; return '<span class="' + (d < 0 ? 'neg' : 'pos') + '">' + (d >= 0 ? '+' : '') + num(d, 2) + ' điểm</span>'; }
+    var c = chg(a, b); return c == null ? '—' : '<span class="' + (c < 0 ? 'neg' : 'pos') + '">' + (c >= 0 ? '+' : '') + M.fmtPct(c, 1) + '</span>';
+  }
+  function sMoney(x) { return x == null || !isFinite(x) ? '—' : (Math.abs(x) >= 1e9 ? num(x / 1e9, 2) + ' tỷ' : Math.abs(x) >= 1e6 ? num(x / 1e6, 1) + ' triệu' : money(x)); }
+  function signMoney(x) { return x == null || !isFinite(x) ? '—' : '<span class="' + (x < 0 ? 'neg' : 'pos') + '">' + (x >= 0 ? '+' : '−') + sMoney(Math.abs(x)) + '</span>'; }
+  V.growth = function (host, ctx) {
+    var gr = M.growth(ctx.cube, ctx.f, 20000), c = gr.cur, p = gr.prev, h = filterLine(ctx);
+    if (!gr.hasCur) { host.innerHTML = h + nodata('Kỳ lọc chưa có file Phân tích shop (Shop Analytics_Key metrics) – cây chỉ số cần số liệu theo ngày của shop.'); return; }
+    var per = 'Kỳ này ' + M.fmtPeriod(c.from, c.to) + ' (' + c.days + ' ngày có số liệu) so với kỳ trước ' + M.fmtPeriod(gr.prevFrom, gr.prevTo) + ' (' + p.days + ' ngày). Số đếm tính bình quân ngày để so sánh được cả khi tháng chưa hết.';
+    h += '<p class="note">' + per + '</p>';
+    // 1. Kết luận
+    var out = [];
+    if (gr.hasPrev) {
+      out.push('GMV bình quân ngày ' + sMoney(c.gmvD) + ', kỳ trước ' + sMoney(p.gmvD) + ' (' + chgCell(p.gmvD, c.gmvD) + ').');
+      if (gr.funnel) {
+        var big = gr.funnel.slice().sort(function (x, y) { return Math.abs(y.impact) - Math.abs(x.impact); })[0];
+        out.push('Nhân tố ảnh hưởng lớn nhất: <b>' + esc(big.label.toLowerCase()) + '</b> (' + chgCell(big.a, big.b) + '), làm GMV/ngày ' + (big.impact < 0 ? 'giảm ' : 'tăng ') + sMoney(Math.abs(big.impact)) + '.');
+        var conv = gr.funnel.filter(function (x) { return x.key === 'c2o'; })[0];
+        if (conv && big.key === 'impr' && conv.impact > 0) out.push('Tỷ lệ nhấp thành đơn vẫn tăng – khách đã vào xem vẫn mua; cần tập trung đưa thêm người tới (nội dung, LIVE, quảng cáo, nhà sáng tạo).');
+      }
+      var negCh = (gr.channels || []).filter(function (x) { return x.delta < 0; }).slice(0, 2);
+      if (negCh.length && gr.gmvDelta < 0) out.push('Kênh giảm nhiều nhất: ' + negCh.map(function (x) { return esc(x.label) + ' ' + signMoney(x.delta) + '/ngày' + (x.share != null ? ' (' + M.fmtPct(x.share, 0) + ' mức giảm)' : ''); }).join('; ') + '.');
+    } else out.push('Chưa có số liệu kỳ trước (' + M.fmtPeriod(gr.prevFrom, gr.prevTo) + ') để so sánh.');
+    var hs = (ctx.cube.health || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0];
+    if (hs) {
+      var warn = [];
+      if (hs.late != null && hs.late > M.healthTargets.late) warn.push('gửi hàng muộn ' + M.fmtPct(hs.late, 2) + ' (mục tiêu ≤ ' + M.fmtPct(M.healthTargets.late, 0) + ')');
+      if (hs.chat != null && hs.chat < M.healthTargets.chat) warn.push('hài lòng qua chat ' + M.fmtPct(hs.chat, 2) + ' (mục tiêu ≥ ' + M.fmtPct(M.healthTargets.chat, 0) + ')');
+      if (hs.frozen > 0) warn.push(hs.frozen + ' sản phẩm bị đóng băng');
+      if (warn.length) out.push('Tình trạng tài khoản ngày ' + M.fmtDate(hs.date) + ': ' + warn.join('; ') + ' – rủi ro bị giảm hiển thị.');
+    }
+    h += '<h3>Kết luận</h3><ul class="comments">' + out.map(function (t) { return '<li class="cm-info"><span class="cm-ic" aria-hidden="true">i</span><span>' + t + '</span></li>'; }).join('') + '</ul>';
+
+    // 2. Phễu bán hàng
+    h += '<h3>1. Phễu bán hàng toàn shop (bình quân ngày)</h3>';
+    h += '<div class="f">GMV = Lượt hiển thị sản phẩm × Tỷ lệ nhấp × Tỷ lệ nhấp thành đơn × Giá trị đơn bình quân</div>';
+    var fr = [];
+    var fRow = function (label, a, b, ratio, impact, fmt) { fr.push([label, fmt(a), fmt(b), chgCell(a, b, ratio), impact == null ? '' : signMoney(impact)]); };
+    var imp = {}; (gr.funnel || []).forEach(function (x) { imp[x.key] = x.impact; });
+    fRow('<b>GMV / ngày</b>', p.gmvD, c.gmvD, false, gr.hasPrev ? c.gmvD - p.gmvD : null, sMoney);
+    fRow('Lượt hiển thị sản phẩm / ngày', p.imprD, c.imprD, false, imp.impr, function (x) { return num(x, 0); });
+    fRow('Tỷ lệ nhấp (nhấp ÷ hiển thị)', p.ctr, c.ctr, true, imp.ctr, function (x) { return M.fmtPct(x, 2); });
+    fRow('Tỷ lệ nhấp thành đơn', p.c2o, c.c2o, true, imp.c2o, function (x) { return M.fmtPct(x, 2); });
+    fRow('Giá trị đơn bình quân', p.aov, c.aov, false, imp.aov, money);
+    fRow('Khách vào shop / ngày <span class="muted small">(tham khảo)</span>', p.visitorsD, c.visitorsD, false, null, function (x) { return num(x, 0); });
+    fRow('Khách thành đơn <span class="muted small">(tham khảo)</span>', p.v2o, c.v2o, true, null, function (x) { return M.fmtPct(x, 2); });
+    h += tbl(['Chỉ số', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Thay đổi', num: true }, { t: 'Ảnh hưởng tới GMV/ngày', num: true }], fr);
+    if (gr.hasPrev && !gr.funnel) h += '<p class="note">Thiếu một trong các chỉ số (hiển thị, nhấp, đơn) ở một kỳ nên chưa tách được ảnh hưởng.</p>';
+    h += src('Ảnh hưởng tách theo phương pháp logarit (LMDI): cộng các dòng ảnh hưởng đúng bằng chênh lệch GMV/ngày. Nguồn: Shop Analytics.');
+
+    // 3. Kênh
+    if (gr.channels) {
+      h += '<h3>2. GMV theo kênh (bình quân ngày)</h3>' + tbl(['Kênh', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Chênh lệch/ngày', num: true }, { t: 'Phần của tổng thay đổi', num: true }],
+        gr.channels.map(function (x) { return [esc(x.label), sMoney(x.a), sMoney(x.b), signMoney(x.delta), x.share == null ? '—' : M.fmtPct(x.share, 0)]; }));
+    }
+
+    // 4. Video
+    h += '<h3>3. Video</h3>';
+    if (c.video) {
+      var vr = [['Lượt xem video / ngày', num(p.video && p.video.vvD, 0), num(c.video.vvD, 0), chgCell(p.video && p.video.vvD, c.video.vvD)],
+        ['Lượt nhấp sản phẩm / 1.000 lượt xem', num(p.video && p.video.clicksPerView * 1000, 1), num(c.video.clicksPerView * 1000, 1), chgCell(p.video && p.video.clicksPerView, c.video.clicksPerView)],
+        ['GMV / lượt nhấp', money(p.video && p.video.gmvPerClick), money(c.video.gmvPerClick), chgCell(p.video && p.video.gmvPerClick, c.video.gmvPerClick)],
+        ['GMV / 1.000 lượt xem', money(p.video && p.video.gmvPerView * 1000), money(c.video.gmvPerView * 1000), chgCell(p.video && p.video.gmvPerView, c.video.gmvPerView)],
+        ['<b>GMV video / ngày</b>', sMoney(p.video && p.video.gmvD), sMoney(c.video.gmvD), chgCell(p.video && p.video.gmvD, c.video.gmvD)]];
+      h += tbl(['Chỉ số (Video performance, tất cả kênh)', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Thay đổi', num: true }], vr);
+      if (gr.videoFunnel) h += '<p class="note">Ảnh hưởng tới GMV video/ngày: ' + gr.videoFunnel.map(function (x) { return esc(x.label.toLowerCase()) + ' ' + signMoney(x.impact); }).join('; ') + '.</p>';
+    } else h += nodata('Chưa có file Video performance trong kỳ lọc.');
+    var vl = c.vl;
+    if (vl.n) {
+      var vlp = p.vl;
+      h += '<h4>Danh sách video (từng video)</h4>' + tbl(['Chỉ số', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }], [
+        ['Số video có phát sinh lượt xem', vlp.n ? num(vlp.videos) : '—', num(vl.videos)],
+        ['Video mới đăng trong kỳ', vlp.n ? num(vlp.newVideos) : '—', num(vl.newVideos) + (vl.newPerDay != null ? ' <span class="muted small">(' + num(vl.newPerDay, 1) + '/ngày)</span>' : '')],
+        ['Trung vị lượt xem / video', vlp.n ? num(vlp.medianVV, 0) : '—', num(vl.medianVV, 0)],
+        ['Trung vị lượt xem / video mới', vlp.n ? num(vlp.medianVVNew, 0) : '—', num(vl.medianVVNew, 0)],
+        ['Video có GMV', vlp.n ? num(vlp.withGmv) : '—', num(vl.withGmv) + ' (' + M.fmtPct(vl.videos ? vl.withGmv / vl.videos : null, 0) + ')'],
+        ['10% video tốt nhất chiếm', vlp.n ? M.fmtPct(vlp.top10Share, 0) : '—', M.fmtPct(vl.top10Share, 0) + ' GMV video'],
+        ['GMV / 1.000 lượt xem', vlp.n ? money(vlp.gpm) : '—', money(vl.gpm)]]);
+      h += tbl(['Nhóm lượt xem', { t: 'Số video', num: true }, { t: 'Lượt xem', num: true }, { t: 'GMV', num: true }], vl.buckets.map(function (b) { return [b.label, num(b.videos), num(b.vv), money(b.gmv)]; }));
+      h += '<h4>Theo kênh đăng (10 kênh GMV cao nhất)</h4>' + tbl(['Kênh', 'Phạm vi', { t: 'Video', num: true }, { t: 'Video mới', num: true }, { t: 'Lượt xem', num: true }, { t: 'GMV', num: true }, { t: 'GMV/1.000 lượt xem', num: true }],
+        vl.byAccount.slice(0, 10).map(function (a) { return [esc(a.account), esc(a.scope || ''), num(a.videos), num(a.newVideos), num(a.vv), money(a.gmv), money(a.gpm)]; }));
+      h += src('Nguồn: danh sách video ' + cov(vl.coverage) + (vl.excluded.length ? ' · ' + vl.excluded.length + ' dòng thuộc kỳ chỉ trùng một phần với kỳ lọc không được tính' : ''));
+    } else h += nodata('Chưa có danh sách từng video trong kỳ lọc – cần để đếm số video và lượt xem trên mỗi video. Xuất ở Số liệu phân tích → Phân tích LIVE & video → Video → Chi tiết → Xuất.');
+
+    // 5. LIVE
+    h += '<h3>4. LIVE</h3>';
+    var ll = c.ll, lp = p.ll;
+    if (ll.n) {
+      var lr = function (label, a, b, fmt, ratio) { return [label, lp.n ? fmt(a) : '—', fmt(b), lp.n ? chgCell(a, b, ratio) : '—']; };
+      h += tbl(['Chỉ số (danh sách phiên LIVE)', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Thay đổi', num: true }], [
+        lr('Số phiên / ngày', lp.nDays ? lp.sessions / lp.nDays : null, ll.sessions / ll.nDays, function (x) { return num(x, 1); }),
+        lr('Giờ LIVE / ngày', lp.nDays ? lp.hours / lp.nDays : null, ll.hours / ll.nDays, function (x) { return num(x, 1); }),
+        lr('Giờ / phiên', lp.hoursPerSession, ll.hoursPerSession, function (x) { return num(x, 2); }),
+        lr('Người xem / giờ', lp.viewersPerHour, ll.viewersPerHour, function (x) { return num(x, 0); }),
+        lr('Lượt hiển thị sản phẩm / giờ', lp.imprPerHour, ll.imprPerHour, function (x) { return num(x, 0); }),
+        lr('CTR (nhấp ÷ hiển thị)', lp.ctr, ll.ctr, function (x) { return M.fmtPct(x, 2); }, true),
+        lr('Nhấp thành đơn', lp.cvr, ll.cvr, function (x) { return M.fmtPct(x, 2); }, true),
+        lr('Giá trị đơn', lp.aov, ll.aov, money),
+        lr('<b>GMV / giờ LIVE</b>', lp.gmvPerHour, ll.gmvPerHour, money),
+        lr('GMV / phiên', lp.gmvPerSession, ll.gmvPerSession, money)]);
+      if (gr.liveFunnel) h += '<p class="note">Ảnh hưởng tới GMV LIVE/ngày: ' + gr.liveFunnel.map(function (x) { return esc(x.label.toLowerCase()) + ' ' + signMoney(x.impact); }).join('; ') + '.</p>';
+      h += '<h4>Theo khung giờ bắt đầu</h4>' + tbl(['Khung giờ', { t: 'Phiên', num: true }, { t: 'Giờ LIVE', num: true }, { t: 'GMV', num: true }, { t: 'GMV / giờ', num: true }, { t: 'Người xem / giờ', num: true }],
+        ll.bySlot.filter(function (s) { return s.sessions; }).map(function (s) { return [s.label, num(s.sessions), num(s.hours, 1), money(s.gmv), money(s.gmvPerHour), num(s.viewersPerHour, 0)]; }));
+      h += '<h4>Theo tài khoản LIVE</h4>' + tbl(['Tài khoản', { t: 'Phiên', num: true }, { t: 'Giờ', num: true }, { t: 'GMV', num: true }, { t: 'GMV / giờ', num: true }, { t: 'CTR', num: true }, { t: 'Nhấp thành đơn', num: true }],
+        ll.byAccount.slice(0, 10).map(function (a) { return [esc(a.account), num(a.sessions), num(a.hours, 1), money(a.gmv), money(a.gmvPerHour), M.fmtPct(a.ctr, 2), M.fmtPct(a.cvr, 2)]; }));
+      h += src('Nguồn: danh sách phiên LIVE ' + cov(ll.coverage) + ' · giờ LIVE cộng tất cả tài khoản, các phiên chạy song song được cộng dồn; phiên rất dài (trên 6 giờ) kéo giờ/phiên bình quân lên.');
+    } else h += nodata('Chưa có danh sách từng phiên LIVE trong kỳ lọc – cần để biết LIVE giảm do ít giờ hơn hay do mỗi giờ ít người xem/ít đơn hơn. Xuất ở Số liệu phân tích → Phân tích LIVE & video → LIVE → Chi tiết → Xuất.');
+
+    // 6. Liên kết
+    var ac = ctx.cube._aff || [];
+    var affRows = function (a, b) { return ac.filter(function (r) { return (!ctx.f.shop || r.shop === ctx.f.shop) && r.from >= a && r.to <= b; }); };
+    var ra = affRows(c.from, c.to), rb = affRows(gr.prevFrom, gr.prevTo);
+    if (ra.length) {
+      var sum = function (rs, k) { var s = 0; rs.forEach(function (r) { if (typeof r[k] === 'number') s += r[k]; }); return s; };
+      var fullMonth = function (r) { var e = r.to.split('-').map(Number); return r.from.slice(8) === '01' && r.from.slice(0, 7) === r.to.slice(0, 7) && e[2] === new Date(Date.UTC(e[0], e[1], 0)).getUTCDate(); };
+      var aggr = function (rs) {
+        var o = { gmv: sum(rs, 'gmv'), videos: sum(rs, 'videos'), lives: sum(rs, 'lives'), creators: sum(rs, 'creators'), days: 0, full: rs.every(fullMonth) };
+        rs.forEach(function (r) { o.days += Math.round((Date.parse(r.to) - Date.parse(r.from)) / 864e5) + 1; });
+        o.perContent = (o.videos + o.lives) > 0 ? o.gmv / (o.videos + o.lives) : null;
+        o.gmvD = o.days ? o.gmv / o.days : null; o.contentD = o.days ? (o.videos + o.lives) / o.days : null; return o;
+      };
+      var A = aggr(ra), B = aggr(rb), hasB = rb.length > 0, crOk = A.full && (!hasB || B.full);
+      h += '<h3>5. Liên kết (nhà sáng tạo)</h3>' + tbl(['Chỉ số', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Thay đổi', num: true }], [
+        ['GMV nhờ nhà sáng tạo / ngày', hasB ? sMoney(B.gmvD) : '—', sMoney(A.gmvD), hasB ? chgCell(B.gmvD, A.gmvD) : '—'],
+        ['Video + buổi LIVE liên kết / ngày', hasB ? num(B.contentD, 0) : '—', num(A.contentD, 0), hasB ? chgCell(B.contentD, A.contentD) : '—'],
+        ['GMV trên mỗi nội dung', hasB ? money(B.perContent) : '—', money(A.perContent), hasB ? chgCell(B.perContent, A.perContent) : '—'],
+        ['Nhà sáng tạo có hoạt động', crOk && hasB ? num(B.creators) : '—', crOk ? num(A.creators) : '—', crOk && hasB ? chgCell(B.creators, A.creators) : '—']]);
+      h += src('Nguồn: Liên kết – chỉ số cốt lõi (chỉ tính các kỳ nằm trọn trong kỳ lọc, quy về bình quân ngày).' + (crOk ? '' : ' Số nhà sáng tạo chỉ so được khi cả hai kỳ là file trọn tháng: file xuất khi tháng chưa hết, TikTok tự chuyển nhiều cột sang “trung bình mỗi ngày”.'));
+    }
+
+    // 7. Định mức quy đổi
+    var nm = gr.norm;
+    h += '<h3>6. Định mức quy đổi – mất bao nhiêu thì cần bù bao nhiêu</h3>';
+    h += '<div class="form-row"><label>Số lượng<input id="grAmt" type="text" inputmode="numeric" value="20.000"></label><label>Đơn vị<select id="grUnit">' +
+      '<option value="visitors">khách vào shop / ngày</option><option value="vv">lượt xem video / ngày</option><option value="vclicks">lượt nhấp sản phẩm từ video / ngày</option><option value="gmv">đồng GMV / ngày</option></select></label></div><div id="grOut"></div>';
+    h += '<p class="note">Định mức lấy theo kỳ lọc (thiếu thì lấy kỳ trước): lượt xem mỗi video = ' + num(nm.vvPerVideo, 0) + ' (' + esc(nm.vvPerVideoSrc) + '); GMV/1.000 lượt xem = ' + money(nm.gmvPerView && nm.gmvPerView * 1000) +
+      '; lượt nhấp/1.000 lượt xem = ' + num(nm.clicksPerView && nm.clicksPerView * 1000, 1) + '; khách thành đơn = ' + M.fmtPct(nm.v2o, 2) + '; giá trị đơn = ' + money(nm.aov) + '; GMV/giờ LIVE = ' + (nm.gmvPerHour ? money(nm.gmvPerHour) : 'chưa có (cần danh sách LIVE)') + '.</p>';
+
+    // 8. Tình trạng tài khoản
+    var hl = (ctx.cube.health || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    h += '<h3>7. Tình trạng tài khoản shop</h3>';
+    if (hl.length) {
+      var okb = function (ok) { return ok == null ? '' : ok ? badge({ cls: 'good', icon: '✓', label: 'Đạt' }) : badge({ cls: 'bad', icon: '✗', label: 'Không đạt' }); };
+      h += tbl(['Ngày ghi nhận', { t: 'Điểm', num: true }, { t: 'Gửi hàng muộn', num: true }, '', { t: 'Hài lòng qua chat', num: true }, '', { t: 'Vi phạm trong tháng', num: true }, { t: 'SP bị đóng băng', num: true }, 'Ghi chú'],
+        hl.slice(0, 6).map(function (x) { return [M.fmtDate(x.date), num(x.score), M.fmtPct(x.late, 2), okb(x.late == null ? null : x.late <= M.healthTargets.late), M.fmtPct(x.chat, 2), okb(x.chat == null ? null : x.chat >= M.healthTargets.chat), num(x.violations), num(x.frozen), esc(x.note || '')]; }));
+      h += src('Nguồn: Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (ghi nhận thủ công ở mục Chia sẻ, sao lưu & cài đặt). Mục tiêu theo TikTok: gửi hàng muộn ≤ 4%, hài lòng qua chat ≥ 70%.');
+    } else h += nodata('Chưa ghi nhận tình trạng tài khoản. Vào Chia sẻ, sao lưu & cài đặt → “Tình trạng tài khoản shop” để nhập điểm, tỷ lệ gửi hàng muộn, hài lòng qua chat, số vi phạm.');
+    host.innerHTML = h;
+
+    // máy tính quy đổi
+    var amt = host.querySelector('#grAmt'), unit = host.querySelector('#grUnit'), outEl = host.querySelector('#grOut');
+    var calc = function () {
+      var x = M.parseNum ? M.parseNum(amt.value) : Number(String(amt.value).replace(/\./g, '').replace(',', '.'));
+      if (!isFinite(x) || x <= 0) { outEl.innerHTML = ''; return; }
+      var u = unit.value, gmv = null, views = null, clicks = null, orders = null;
+      if (u === 'visitors') { orders = nm.v2o ? x * nm.v2o : null; gmv = orders != null && nm.aov ? orders * nm.aov : null; views = gmv != null && nm.gmvPerView ? gmv / nm.gmvPerView : null; }
+      else if (u === 'vv') { views = x; gmv = nm.gmvPerView ? x * nm.gmvPerView : null; clicks = nm.clicksPerView ? x * nm.clicksPerView : null; }
+      else if (u === 'vclicks') { clicks = x; gmv = nm.gmvPerClick ? x * nm.gmvPerClick : null; views = nm.clicksPerView ? x / nm.clicksPerView : null; }
+      else { gmv = x; views = nm.gmvPerView ? x / nm.gmvPerView : null; }
+      var videos = views != null && nm.vvPerVideo ? views / nm.vvPerVideo : null, hours = gmv != null && nm.gmvPerHour ? gmv / nm.gmvPerHour : null;
+      var rows = [];
+      if (orders != null) rows.push(['Đơn hàng tương đương / ngày', num(orders, 0)]);
+      rows.push(['GMV tương đương / ngày', gmv == null ? '—' : sMoney(gmv)]);
+      if (clicks != null && u !== 'vclicks') rows.push(['Lượt nhấp sản phẩm từ video', num(clicks, 0)]);
+      rows.push(['Bù bằng video: lượt xem cần thêm / ngày', views == null ? '—' : num(views, 0)]);
+      rows.push(['Bù bằng video: số video cần thêm / ngày', videos == null ? '—' : num(videos, 1) + ' <span class="muted small">(≈ ' + num(videos * 30, 0) + ' video/tháng)</span>']);
+      rows.push(['Bù bằng LIVE: số giờ LIVE cần thêm / ngày', hours == null ? '—' : num(hours, 1) + ' giờ']);
+      outEl.innerHTML = tbl(['Quy đổi', { t: 'Kết quả', num: true }], rows);
+    };
+    if (amt && unit) { amt.addEventListener('input', calc); unit.addEventListener('change', calc); calc(); }
+  };
+
   root.TTSV = V;
 })(window);

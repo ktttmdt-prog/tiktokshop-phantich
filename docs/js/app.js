@@ -167,7 +167,7 @@
   }
 
   // ================= KẾ TOÁN =================
-  var TABS = [['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['detail', 'Bảng chi tiết'], ['content', 'Video & Liên kết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Chia sẻ, sao lưu & cài đặt']];
+  var TABS = [['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['detail', 'Bảng chi tiết'], ['content', 'Video & Liên kết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Chia sẻ, sao lưu & cài đặt']];
   function startAccountant() {
     S.mode = 'ketoan';
     header('Phân tích TikTok Shop', 'Chế độ kế toán – dữ liệu lưu trong trình duyệt của máy này',
@@ -203,7 +203,7 @@
     var warn = backupBanner();
     try {
       if (t === 'overview') V.overview(main, ctx()); else if (t === 'shop') V.shop(main, ctx()); else if (t === 'roas') V.roas(main, ctx());
-      else if (t === 'adsctl') V.adsControl(main, ctx()); else if (t === 'acc') V.accounting(main, ctx()); else if (t === 'content') V.content(main, ctx()); else if (t === 'detail') renderDetail(main);
+      else if (t === 'adsctl') V.adsControl(main, ctx()); else if (t === 'growth') V.growth(main, ctx()); else if (t === 'acc') V.accounting(main, ctx()); else if (t === 'content') V.content(main, ctx()); else if (t === 'detail') renderDetail(main);
       else if (t === 'import') renderImport(main); else if (t === 'history') renderHistory(main); else if (t === 'settings') renderSettings(main);
       if (warn) main.insertAdjacentHTML('afterbegin', warn);
     } catch (e) { main.innerHTML = '<div class="nodata">Lỗi hiển thị: ' + esc(e.message) + '</div>'; console.error(e); }
@@ -260,7 +260,7 @@
     var c = S.cube, f = S.f, keep = function (r) { var a = r.from || r.date, b = r.to || r.date; return (!f.shop || r.shop === f.shop) && !(b < f.from || a > f.to); };
     var pick = function (sec) { var cols = c[sec].cols; return { cols: cols, rows: c['_' + sec].filter(keep).map(function (o) { return cols.map(function (k) { return o[k]; }); }) }; };
     var out = { generatedAt: c.generatedAt, today: c.today, thresholds: c.thresholds, official: c.official, shops: (c.shops || []).filter(function (s) { return !f.shop || s.id === f.shop; }) };
-    ['ads', 'acct', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking'].forEach(function (k) { out[k] = pick(k); }); out.market = c.market || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
+    ['ads', 'acct', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking', 'vlist', 'llist'].forEach(function (k) { out[k] = pick(k); }); out.market = c.market || []; out.health = c.health || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
     var tp = {}, tc = c.topup.cols;
     c._topup.filter(keep).forEach(function (r) { var k = [r.shop, r.date, r.accountId, r.cls, r.pay, r.ok].join('|'); var a = tp[k] || (tp[k] = { shop: r.shop, date: r.date, time: r.date, accountId: r.accountId, accountName: r.accountName, type: 'Tổng trong ngày', subtype: '', status: r.ok ? 'Thành công' : 'Không thành công', moneyType: '', amount: 0, voucher: '', imp: 0, cls: r.cls, pay: r.pay, ok: r.ok }); a.amount += r.amount; });
     out.topup = { cols: tc, rows: Object.keys(tp).map(function (k) { return tc.map(function (x) { return tp[k][x]; }); }) };
@@ -460,6 +460,12 @@
       '<label class="grow">Chỉ số ACE<input id="mkAce" placeholder="vd: Danh mục 5% cao nhất; Nội dung 5% cao nhất; Tiếp cận 5% cao nhất"></label><label class="grow">Ghi chú<input id="mkNote"></label><button data-act="addMarket">Thêm</button></div>' +
       '<p class="small muted">Lấy ở Seller Center → Số liệu phân tích: “Bảng xếp hạng GMV” (Phân tích cửa hàng) và chỉ số ACE (Tăng trưởng &amp; thông tin chuyên sâu).</p>' +
       (mk.length ? '<div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Ngày</th><th>Hạng</th><th>Thay đổi</th><th>ACE</th><th>Ghi chú</th><th></th></tr></thead><tbody>' + mk.map(function (m) { return '<tr><td>' + M.fmtDate(m.date) + '</td><td>' + esc(m.rank) + '</td><td>' + esc(m.change || '') + '</td><td>' + esc(m.ace || '') + '</td><td>' + esc(m.note || '') + '</td><td><button class="link" data-act="delMarket" data-id="' + esc(m.id) + '">Xóa</button></td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div>';
+    var hl = (D.settings.health || []).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    h += '<h2>Tình trạng tài khoản shop</h2><div class="card form"><div class="form-row"><label>Ngày<input type="date" id="hlDate" value="' + K.today() + '"></label><label>Điểm tình trạng<input id="hlScore" inputmode="numeric" placeholder="vd: 700"></label>' +
+      '<label>Gửi hàng muộn (%)<input id="hlLate" placeholder="vd: 3,5"></label><label>Hài lòng qua chat (%)<input id="hlChat" placeholder="vd: 72,5"></label><label>Vi phạm trong tháng<input id="hlViol" inputmode="numeric" placeholder="vd: 4"></label><label>Sản phẩm bị đóng băng<input id="hlFrozen" inputmode="numeric" placeholder="vd: 1"></label>' +
+      '<label class="grow">Ghi chú<input id="hlNote" placeholder="vd: còn 1 vi phạm có thể khiếu nại"></label><button data-act="addHealth">Thêm</button></div>' +
+      '<p class="small muted">Lấy ở Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (mục Tổng quan và Hồ sơ vi phạm). TikTok chưa cho xuất file mục này nên ghi nhận thủ công mỗi tuần; số liệu hiện ở tab Cây chỉ số.</p>' +
+      (hl.length ? '<div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Ngày</th><th>Điểm</th><th>Gửi hàng muộn</th><th>Hài lòng chat</th><th>Vi phạm</th><th>Đóng băng</th><th>Ghi chú</th><th></th></tr></thead><tbody>' + hl.map(function (x) { return '<tr><td>' + M.fmtDate(x.date) + '</td><td>' + M.fmtNum(x.score) + '</td><td>' + M.fmtPct(x.late, 2) + '</td><td>' + M.fmtPct(x.chat, 2) + '</td><td>' + M.fmtNum(x.violations) + '</td><td>' + M.fmtNum(x.frozen) + '</td><td>' + esc(x.note || '') + '</td><td><button class="link" data-act="delHealth" data-id="' + esc(x.id) + '">Xóa</button></td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div>';
     h += '<h2>Shop</h2><div class="card form">' + D.settings.shops.map(function (s) { return '<div class="form-row"><label>' + esc(s.id) + '<input data-shop="' + esc(s.id) + '" value="' + esc(s.name) + '"></label></div>'; }).join('') + '<div class="form-row"><label>Thêm shop<input id="setNewShop" placeholder="Tên shop"></label><button data-act="saveShops">Lưu</button></div></div>';
     h += '<h2>Bảng ánh xạ cột nguồn → chỉ tiêu</h2><p class="note">So khớp tên cột không phân biệt dấu, hoa/thường, bỏ phần trong ngoặc. Cột thông tin cá nhân không bao giờ được lưu.</p>' + SC.all.map(function (d) {
       return '<details class="card"><summary><strong>' + esc(d.label) + '</strong></summary><p class="small">' + esc(d.desc) + '<br><span class="muted">Nguồn: ' + esc(d.source) + '</span></p><div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Chỉ tiêu</th><th>Kiểu</th><th>Bắt buộc</th><th>Tên cột nguồn được nhận</th><th>Ghi chú</th></tr></thead><tbody>' +
@@ -492,6 +498,15 @@
     D.settings.market.push({ id: 'm' + Date.now().toString(36), date: date, rank: rank, change: $('#mkChange').value.trim(), ace: $('#mkAce').value.trim(), note: $('#mkNote').value.trim() });
     D.saveMeta().then(function () { toast('Đã ghi nhận số liệu thị trường.'); rebuild(); });
   };
+  actions.addHealth = function () {
+    var date = $('#hlDate').value; if (!date) { toast('Nhập ngày ghi nhận.', 'err'); return; }
+    var numOrNull = function (id, pct) { var s = $('#' + id).value.trim().replace('%', ''); if (!s) return null; var n = Number(s.replace(/\./g, '').replace(',', '.')); if (s.indexOf(',') < 0 && /^\d+\.\d+$/.test(s)) n = Number(s); return isFinite(n) ? (pct ? n / 100 : n) : null; };
+    var rec = { id: 'h' + Date.now().toString(36), date: date, score: numOrNull('hlScore'), late: numOrNull('hlLate', true), chat: numOrNull('hlChat', true), violations: numOrNull('hlViol'), frozen: numOrNull('hlFrozen'), note: $('#hlNote').value.trim() };
+    if (rec.score == null && rec.late == null && rec.chat == null && rec.violations == null) { toast('Nhập ít nhất một chỉ số.', 'err'); return; }
+    D.settings.health = D.settings.health || []; D.settings.health.push(rec);
+    D.saveMeta().then(function () { toast('Đã ghi nhận tình trạng tài khoản.'); rebuild(); });
+  };
+  actions.delHealth = function (b) { var id = b.getAttribute('data-id'); D.settings.health = (D.settings.health || []).filter(function (m) { return m.id !== id; }); D.saveMeta().then(function () { rebuild(); }); };
   actions.delMarket = function (b) { var id = b.getAttribute('data-id'); D.settings.market = (D.settings.market || []).filter(function (m) { return m.id !== id; }); D.saveMeta().then(function () { rebuild(); }); };
   actions.saveShops = function () {
     $$('[data-shop]').forEach(function (i) { var s = D.settings.shops.filter(function (x) { return x.id === i.getAttribute('data-shop'); })[0]; if (s && i.value.trim()) s.name = i.value.trim(); });

@@ -148,6 +148,56 @@
       f('revenue', 'Tổng doanh thu (file tài chính)', 'Money', ['total revenue', 'tong doanh thu']), f('fees', 'Tổng phí', 'Money', ['total fees', 'tong phi']),
       f('related_order_id', 'Mã đơn liên quan', 'Text', ['related order id', 'ma don hang lien quan'])] });
 
+  // Danh sách từng video (Số liệu phân tích → Video → Chi tiết → Xuất): số liệu của từng video trong kỳ ghi ở dòng 1
+  ds({ key: 'video_list', label: 'Danh sách video – từng video theo kỳ (Video Performance List)', source: 'Seller Center → Số liệu phân tích → Phân tích LIVE & video → Video → Chi tiết → Xuất (Video Performance List_….xlsx)',
+    desc: 'Mỗi dòng là một video có phát sinh số liệu trong kỳ (kỳ ở dòng 1). Dùng để đếm số video, lượt xem trên mỗi video, GMV trên 1.000 lượt xem theo kênh đăng. Ghi “Phạm vi” là Tài khoản kết nối hoặc Tài khoản liên kết.',
+    signature: ['video_id', 'vv'], keyFields: ['video_id'], entityFields: ['video_id'], hasScope: true, coverage: true,
+    fields: [f('creator', 'Kênh đăng (tên nhà sáng tạo)', 'Text', ['ten nha sang tao', 'nha sang tao', 'creator name', 'creator']),
+      f('creator_id', 'ID kênh', 'Text', ['id nha sang tao', 'creator id']),
+      f('title', 'Nội dung video', 'Text', ['thong tin video', 'video info', 'video title']),
+      f('video_id', 'ID video', 'Text', ['id video', 'video id'], { req: 1 }),
+      f('publish_time', 'Thời gian đăng', 'DateTime', ['thoi gian', 'thoi gian dang', 'post time', 'publish time']),
+      f('vv', 'Lượt xem (VV)', 'Int', ['vv', 'video views', 'luot xem video'], { req: 1, dz: 1 }),
+      f('likes', 'Lượt thích', 'Int', ['luot thich', 'likes'], { dz: 1 }), f('comments', 'Bình luận', 'Int', ['binh luan', 'comments'], { dz: 1 }),
+      f('shares', 'Lượt chia sẻ', 'Int', ['luot chia se', 'shares'], { dz: 1 }), f('followers', 'Người theo dõi mới', 'Int', ['nguoi theo doi moi', 'new followers'], { dz: 1 }),
+      f('v2l_clicks', 'Lượt nhấp từ video sang LIVE', 'Int', ['luot nhap tu v den l'], { dz: 1 }),
+      f('impressions', 'Lượt hiển thị sản phẩm', 'Int', ['luot hien thi san pham', 'product impressions'], { dz: 1 }),
+      f('clicks', 'Lượt nhấp sản phẩm', 'Int', ['luot nhap san pham', 'product clicks'], { dz: 1 }),
+      f('buyers', 'Số khách hàng độc nhất', 'Int', ['so khach hang doc nhat', 'unique customers'], { dz: 1, na: 1 }),
+      f('sku_orders', 'Đơn hàng SKU đã ghi nhận', 'Int', ['don hang sku da ghi nhan', 'sku orders'], { dz: 1 }),
+      f('items', 'Số món bán ra ghi nhận vào video', 'Int', ['so mon ban ra ghi nhan vao video', 'items sold'], { dz: 1 }),
+      f('gmv', 'GMV đến từ video', 'Money', ['gmv den tu video', 'gmv den tu video lien ket', 'video attributed gmv'], { req: 1, dz: 1 }),
+      f('gmv_direct', 'GMV video (trực tiếp)', 'Money', ['gmv video', 'video gmv'], { dz: 1 }),
+      f('gmv_indirect', 'GMV gián tiếp của video', 'Money', ['gmv gian tiep cua video'], { dz: 1 }),
+      f('gpm', 'GPM', 'Money', ['gpm'], { na: 1 }), f('ctr', 'Tỷ lệ nhấp (video)', 'Ratio', ['ty le nhap', 'ctr'], { na: 1 }),
+      f('completion', 'Tỷ lệ xem hết video', 'Ratio', ['ty le xem het video', 'completion rate'], { na: 1 })] });
+
+  // Danh sách từng phiên LIVE (Số liệu phân tích → LIVE → Chi tiết → Xuất)
+  ds({ key: 'live_list', label: 'Danh sách phiên LIVE – từng phiên (Live Analysis)', source: 'Seller Center → Số liệu phân tích → Phân tích LIVE & video → LIVE → Chi tiết → Xuất (Live Analysis….xlsx)',
+    desc: 'Mỗi dòng là một phiên LIVE: giờ bắt đầu, thời lượng, người xem, lượt hiển thị/nhấp sản phẩm, đơn, GMV. Dùng để tính GMV mỗi giờ LIVE, người xem mỗi giờ, khung giờ hiệu quả.',
+    dateField: 'start_time', keyFullTime: true, signature: ['start_time', 'duration', 'gmv'], keyFields: ['creator_id', 'start_time'], entityFields: ['handle'], hasScope: true,
+    fields: [f('creator_id', 'ID tài khoản', 'Text', ['id nha sang tao', 'creator id', 'id tai khoan']),
+      f('creator', 'Tên tài khoản', 'Text', ['nha sang tao', 'ten nha sang tao', 'creator']),
+      f('handle', 'Biệt danh tài khoản', 'Text', ['biet danh', 'nickname', 'handle']),
+      f('start_time', 'Thời gian bắt đầu', 'DateTime', ['thoi gian bat dau', 'start time'], { req: 1 }),
+      f('duration', 'Thời lượng (phút)', 'Minutes', ['thoi luong', 'duration'], { req: 1 }),
+      f('gmv', 'GMV đến từ buổi LIVE', 'Money', ['gmv den tu buoi live', 'gmv nho buoi live cua nha sang tao', 'live attributed gmv'], { req: 1, dz: 1 }),
+      f('gmv_direct', 'GMV LIVE (trực tiếp)', 'Money', ['gmv live', 'live gmv'], { dz: 1 }),
+      f('gmv_indirect', 'GMV gián tiếp của LIVE', 'Money', ['gmv gian tiep cua live'], { dz: 1 }),
+      f('products_added', 'Sản phẩm đã thêm', 'Int', ['san pham da them'], { dz: 1, na: 1 }),
+      f('products_sold', 'Số sản phẩm khác nhau đã bán', 'Int', ['cac san pham khac nhau da ban'], { dz: 1, na: 1 }),
+      f('orders_created', 'Đơn hàng đã tạo', 'Int', ['don hang da tao'], { dz: 1 }),
+      f('orders', 'Đơn hàng đã thanh toán', 'Int', ['don hang da thanh toan', 'paid orders'], { dz: 1 }),
+      f('items', 'Số món bán ra ghi nhận vào buổi LIVE', 'Int', ['so mon ban ra ghi nhan vao buoi live'], { dz: 1 }),
+      f('buyers', 'Số khách hàng độc nhất', 'Int', ['so khach hang doc nhat'], { dz: 1 }),
+      f('avg_price', 'Giá trung bình', 'Money', ['gia trung binh'], { na: 1 }), f('ctor', 'CTOR', 'Ratio', ['ctor'], { na: 1 }),
+      f('viewers', 'Người xem', 'Int', ['nguoi xem', 'viewers'], { dz: 1 }), f('views', 'Lượt xem', 'Int', ['luot xem', 'views'], { dz: 1 }),
+      f('avg_watch', 'Thời lượng xem trung bình (giây)', 'Num', ['thoi luong xem trung binh'], { na: 1 }),
+      f('comments', 'Bình luận', 'Int', ['binh luan'], { dz: 1 }), f('shares', 'Lượt chia sẻ', 'Int', ['luot chia se'], { dz: 1 }),
+      f('likes', 'Lượt thích', 'Int', ['luot thich live', 'luot thich'], { dz: 1 }), f('followers', 'Người theo dõi mới', 'Int', ['nguoi theo doi moi'], { dz: 1 }),
+      f('impressions', 'Lượt hiển thị sản phẩm', 'Int', ['luot hien thi san pham'], { dz: 1 }),
+      f('clicks', 'Lượt nhấp sản phẩm', 'Int', ['luot nhap san pham'], { dz: 1 }), f('ctr', 'CTR', 'Ratio', ['ctr'], { na: 1 })] });
+
   // Sheet “Báo cáo” trong file quyết toán (income_….xlsx): tổng cả kỳ, tách từng loại phí – app tự chuyển sheet dạng dọc thành 1 dòng.
   function m(key, label, syn) { return f(key, label, 'Money', syn, { dz: 1 }); }
   ds({ key: 'settlement_report', label: 'Quyết toán – báo cáo tổng hợp theo kỳ (từng loại phí)', source: 'Seller Center → Tài chính → Giao dịch → Đã quyết toán → Xem thêm → Xuất (income_….xlsx, sheet “Báo cáo”)',

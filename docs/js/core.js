@@ -62,6 +62,7 @@
   K.date = function (raw, order) {
     if (raw == null) return null;
     var s = String(raw).trim(); if (!s) return null;
+    s = s.replace(/^(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\/\s*/, '$1 '); // “2026/10/31/ 23:03” (danh sách LIVE của TikTok)
     var m = RX_ISO.exec(s), y, mo, d, h = 0, mi = 0, se = 0, ap = null;
     if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; if (m[4]) { h = +m[4]; mi = +m[5]; } if (m[6]) se = +m[6]; if (m[7]) ap = m[7].toUpperCase(); }
     else {
@@ -79,6 +80,17 @@
     if (mo < 1 || mo > 12 || d < 1 || d > dim(y, mo) || h > 23 || mi > 59 || se > 59) return null;
     var ds = K.ymd(y, mo, d);
     return { date: ds, dt: ds + ' ' + K.pad2(h) + ':' + K.pad2(mi) + ':' + K.pad2(se) };
+  };
+  /* Thời lượng → số phút: “2h 52min”, “1h49'”, “35s”, “1:52:30”, “52 phút” */
+  K.minutes = function (raw) {
+    if (raw == null) return null;
+    var s = String(raw).trim().toLowerCase(); if (!s) return null;
+    var m = /^(\d{1,3}):(\d{2})(?::(\d{2}))?$/.exec(s);
+    if (m) return m[3] != null ? +m[1] * 60 + +m[2] + +m[3] / 60 : +m[1] + +m[2] / 60;
+    var re = /(\d+(?:[.,]\d+)?)\s*(h|giờ|gio|min|m|phút|phut|'|s|giây|giay|")/g, t = 0, any = false, x;
+    while ((x = re.exec(s))) { var v = parseFloat(x[1].replace(',', '.')), u = x[2]; any = true; t += /^(h|giờ|gio)$/.test(u) ? v * 60 : /^(s|giây|giay|")$/.test(u) ? v / 60 : v; }
+    if (any) return Math.round(t * 100) / 100;
+    return /^\d+(\.\d+)?$/.test(s) ? +s : null;
   };
   K.inferOrder = function (values) {
     var dmy = false, mdy = false, any = false;

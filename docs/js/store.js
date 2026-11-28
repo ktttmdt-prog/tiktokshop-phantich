@@ -47,7 +47,12 @@
     return getAll().then(function (all) {
       D.memoryOnly = false; D.settings = all.settings || {}; ensureSettings();
       D.imports = all.imports || [];
-      SC.all.forEach(function (d) { var m = new Map(); (all['ds:' + d.key] || []).forEach(function (r) { m.set(r.k, r); }); D.tables[d.key] = m; });
+      SC.all.forEach(function (d) {
+        var m = new Map(), parts = [all['ds:' + d.key] || []]; // bản cũ lưu cả bảng một khóa; bản mới chia phần 'ds:<bảng>#0000'…
+        Object.keys(all).filter(function (k) { return k.indexOf('ds:' + d.key + '#') === 0; }).sort().forEach(function (k) { parts.push(all[k] || []); });
+        parts.forEach(function (p) { p.forEach(function (r) { m.set(r.k, r); }); });
+        D.tables[d.key] = m;
+      });
       D.version++;
       if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
     });
@@ -59,13 +64,21 @@
     return Promise.resolve();
   };
   D.markDirty = function (ds) { D.dirty[ds] = 1; };
+  var CHUNK = 20000; // số bản ghi mỗi phần – tránh giới hạn kích thước một giá trị của IndexedDB khi bảng rất lớn
+  function saveTable(k) {
+    var rows = Array.from(D.tables[k].values());
+    return tx('readwrite', function (s) {
+      s.delete('ds:' + k);
+      s.delete(IDBKeyRange.bound('ds:' + k + '#', 'ds:' + k + '#￿'));
+      for (var i = 0, n = 0; i < rows.length; i += CHUNK, n++) s.put(rows.slice(i, i + CHUNK), 'ds:' + k + '#' + ('000' + n).slice(-4));
+    });
+  }
   D.save = function () {
     if (D.memoryOnly) { D.dirty = {}; return Promise.resolve(); }
     var keys = Object.keys(D.dirty); D.dirty = {};
-    return tx('readwrite', function (s) {
-      keys.forEach(function (k) { s.put(Array.from(D.tables[k].values()), 'ds:' + k); });
-      s.put(D.settings, 'settings'); s.put(D.imports, 'imports');
-    }).then(function () { D.version++; });
+    return keys.reduce(function (p, k) { return p.then(function () { return saveTable(k); }); }, Promise.resolve())
+      .then(function () { return tx('readwrite', function (s) { s.put(D.settings, 'settings'); s.put(D.imports, 'imports'); }); })
+      .then(function () { D.version++; });
   };
   D.saveMeta = function () { if (D.memoryOnly) return Promise.resolve(); return tx('readwrite', function (s) { s.put(D.settings, 'settings'); s.put(D.imports, 'imports'); }).then(function () { D.version++; }); };
 

@@ -217,3 +217,6 @@ body.report .filters { top: 0; }
 .banner.ok { background: var(--good-bg); }
 .keybox { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
 .tile.tile-bad { border-color: var(--critical); background: var(--bad-bg); }
+/* Cây chỉ số */
+.neg { color: var(--critical); } .pos { color: var(--good); }
+.f { font-family: Consolas, "Courier New", monospace; background: var(--surface-1); border-radius: 6px; padding: 8px 12px; margin: 6px 0 10px; font-size: 13px; white-space: pre-wrap; }

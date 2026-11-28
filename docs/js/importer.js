@@ -216,6 +216,9 @@
         } else if (fd.type === 'Date' || fd.type === 'DateTime') {
           var dd = K.date(raw, orders[fd.key] || 'DMY');
           if (!dd) rowErr.push('“' + fd.label + '” = \'' + raw.slice(0, 40) + '\' không phải ngày hợp lệ'); else v[fd.key] = fd.type === 'Date' ? dd.date : dd.dt;
+        } else if (fd.type === 'Minutes') {
+          var mn = K.minutes(raw);
+          if (mn == null) rowErr.push('“' + fd.label + '” = \'' + raw.slice(0, 40) + '\' không phải thời lượng'); else v[fd.key] = mn;
         } else {
           numF++;
           var n = parseNum(r, +c, raw, fd);
@@ -249,7 +252,7 @@
       if (!minD || p.from < minD) minD = p.from; if (!maxD || p.to > maxD) maxD = p.to;
       p.partial = p.to >= today;
       var kp = [ds.key, p.shop, p.scope];
-      ds.keyFields.forEach(function (kf) { if (kf === ds.dateField) { if (dayLevel) kp.push(p.from); return; } kp.push(v[kf] != null ? String(v[kf]) : ''); });
+      ds.keyFields.forEach(function (kf) { if (kf === ds.dateField) { if (dayLevel) kp.push(ds.keyFullTime ? String(v[kf]) : p.from); return; } kp.push(v[kf] != null ? String(v[kf]) : ''); });
       if (!dayLevel && !ds.noPeriodKey) kp.push('P:' + p.from + '~' + p.to);
       var key = kp.join('|');
       if (ds.allowDupKey) { occ[key] = (occ[key] || 0) + 1; if (occ[key] > 1) key += '#' + occ[key]; }
