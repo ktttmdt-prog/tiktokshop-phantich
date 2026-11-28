@@ -116,7 +116,7 @@
       h += src('Nguồn: báo cáo quảng cáo · số liệu thực có ' + cov(s.coverage) + ' · ' + (s.hasCampaign ? 'cấp chiến dịch' : 'cấp shop') + (s.byDay.length ? ' × ngày' : ' × kỳ') + ' · ROAS, CIR tính lại từ số tổng.');
       h += '<h3>Mục tiêu ROAS</h3>' + remainingInput(ctx) + targetCards(ctx);
     }
-    if (ctx.shop.n) h += '<h3>Toàn shop (Phân tích shop)</h3>' + shopTiles(ctx) + src('Nguồn: Shop Analytics · số liệu thực có ' + cov(ctx.shop.coverage) + ' · chi tiết ở tab Hiệu quả shop.');
+    if (ctx.shop.n) h += '<h3>Toàn shop (Phân tích shop)</h3>' + shopTiles(ctx) + src('Nguồn: Shop Analytics · số liệu thực có ' + cov(ctx.shop.coverage) + ' · chi tiết ở trang Doanh số & khách hàng.');
     h += '<h3>Nhận định chính</h3>' + commentsHtml(ctx);
     var recs = M.recommend(ctx);
     if (recs.length) h += '<h3>Kiến nghị</h3><ol class="recs">' + recs.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>';
@@ -771,7 +771,7 @@
       var okb = function (ok) { return ok == null ? '' : ok ? badge({ cls: 'good', icon: '✓', label: 'Đạt' }) : badge({ cls: 'bad', icon: '✗', label: 'Không đạt' }); };
       h += tbl(['Ngày ghi nhận', { t: 'Điểm', num: true }, { t: 'Gửi hàng muộn', num: true }, '', { t: 'Hài lòng qua chat', num: true }, '', { t: 'Vi phạm trong tháng', num: true }, { t: 'SP bị đóng băng', num: true }, 'Ghi chú'],
         hl.slice(0, 6).map(function (x) { return [M.fmtDate(x.date), num(x.score), M.fmtPct(x.late, 2), okb(x.late == null ? null : x.late <= M.healthTargets.late), M.fmtPct(x.chat, 2), okb(x.chat == null ? null : x.chat >= M.healthTargets.chat), num(x.violations), num(x.frozen), esc(x.note || '')]; }));
-      h += src('Nguồn: Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (ghi nhận thủ công ở mục Chia sẻ, sao lưu & cài đặt). Mục tiêu theo TikTok: gửi hàng muộn ≤ 4%, hài lòng qua chat ≥ 70%.');
+      h += src('Nguồn: Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (ghi nhận thủ công ở trang Cài đặt & chia sẻ). Mục tiêu theo TikTok: gửi hàng muộn ≤ 4%, hài lòng qua chat ≥ 70%.');
     } else h += nodata('Chưa ghi nhận tình trạng tài khoản. Vào Chia sẻ, sao lưu & cài đặt → “Tình trạng tài khoản shop” để nhập điểm, tỷ lệ gửi hàng muộn, hài lòng qua chat, số vi phạm.');
     host.innerHTML = h;
 
@@ -1057,6 +1057,215 @@
       flags: b.months.map(function (m) { return !m.full; }), flagNote: 'Tháng chưa đủ ngày số liệu',
       extra: function (i) { var m = b.months[i]; return [{ name: 'doanh số cả tháng', value: sMoney(m.gmv) }, { name: 'ngày có số liệu', value: num(m.nDays) }]; } });
   };
+
+  // ================= KHUNG TRANG BÁO CÁO DÙNG CHUNG =================
+  /* Mỗi trang: câu hỏi trang trả lời → kết luận → thẻ chỉ số (kỳ này, kỳ trước, chênh lệch) → các khối đánh số → bảng dài thu gọn → thuật ngữ.
+     Quy ước so sánh (báo cáo quản trị): số tiền, số lượng so theo bình quân ngày để kỳ dài ngắn khác nhau vẫn so được; tỷ lệ so bằng điểm %;
+     mũi tên xanh = biến động tốt cho công ty, đỏ = xấu, xám = chỉ để theo dõi (vd chi phí quảng cáo tăng chưa chắc là xấu). */
+  V.GLOSSARY = [
+    ['GMV', 'Doanh số đặt hàng: tổng giá trị đơn khách đặt, gồm cả đơn sau đó hủy hoặc hoàn. Đo sức bán, chưa phải doanh thu kế toán.'],
+    ['ROAS', 'Doanh thu quảng cáo mang về trên mỗi 1 đồng chi quảng cáo (doanh thu gộp ÷ chi phí). ROAS 12 nghĩa là chi 1 đồng, quảng cáo ghi nhận 12 đồng doanh số.'],
+    ['CIR', 'Chi phí quảng cáo trên doanh thu quảng cáo (chi phí ÷ doanh thu gộp). Càng thấp càng tốt; CIR = 1 ÷ ROAS.'],
+    ['AOV', 'Giá trị bình quân mỗi đơn hàng (doanh số ÷ số đơn).'],
+    ['CTR', 'Tỷ lệ bấm: số lượt bấm vào sản phẩm ÷ số lượt sản phẩm được hiển thị.'],
+    ['Đơn SKU', 'Số dòng sản phẩm trong đơn: một đơn có 2 sản phẩm khác nhau tính 2 đơn SKU.'],
+    ['GMV Max', 'Quảng cáo tự động của TikTok Shop, tối ưu theo doanh số.'],
+    ['LIVE', 'Phiên bán hàng phát trực tiếp.'],
+    ['KOL', 'Nhà sáng tạo nội dung (KOL/KOC) đăng video, LIVE bán hộ sản phẩm.'],
+    ['Liên kết', 'Bán hàng qua nhà sáng tạo (affiliate): nhà sáng tạo gắn sản phẩm vào nội dung của họ và nhận hoa hồng trên đơn.'],
+    ['quyết toán', 'TikTok chốt tiền một đơn sau khi giao thành công, trừ phí rồi chuyển tiền về số dư shop.'],
+    ['Doanh thu thuần', 'Tiền hàng của đơn đã quyết toán trừ phần hoàn cho khách.'],
+    ['Lãi đóng góp', 'Doanh thu thuần trừ phí sàn, hoa hồng, quảng cáo, booking và giá vốn: phần kênh đóng góp để trả chi phí chung.'],
+    ['điểm', 'Chênh lệch giữa hai tỷ lệ phần trăm: từ 20% lên 22% là tăng 2 điểm.'],
+    ['Booking', 'Khoản thuê nhà sáng tạo làm video/LIVE, trả ngoài TikTok.'],
+    ['Hoàn tiền', 'Tiền trả lại khách khi trả hàng, khiếu nại hoặc hủy sau thanh toán.'],
+    ['Chốt đơn', 'Tỷ lệ người đã bấm vào sản phẩm rồi đặt mua.'],
+    ['Lượt hiển thị', 'Số lần sản phẩm xuất hiện trước mắt người xem (trong video, LIVE, tìm kiếm, gian hàng).']
+  ];
+  function lcFirst(s) { s = String(s || ''); return /^[A-ZĐ]{2,}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1); }
+  function ucFirst(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function prevF(ctx) { var p = M.prevPeriod(ctx.f.from, ctx.f.to); return { from: p.from, to: p.to, shop: ctx.f.shop, ent: ctx.f.ent }; }
+  function covDays(c) { return c ? M.daysBetween(c.from, c.to) : 0; }
+  function adsDays(s) { return s.byDay && s.byDay.length ? s.byDay.length : covDays(s.coverage); }
+  function kDelta(k) {
+    if (k.prevGap) return null;
+    if (k.cur == null || k.prev == null || !isFinite(k.cur) || !isFinite(k.prev)) return null;
+    if (k.kind === 'none') return null;
+    if (k.kind === 'pct') return { x: (k.cur - k.prev) * 100, kind: 'pts' };
+    var a = k.prev, b = k.cur;
+    if (k.kind === 'flow') { if (!(k.prevDays > 0 && k.curDays > 0)) return null; a = a / k.prevDays; b = b / k.curDays; }
+    return a > 0 ? { x: b / a - 1, kind: 'pct' } : null;
+  }
+  function kTile(k) {
+    var d = kDelta(k), bd = '';
+    if (d) bd = k.neutral ? badge({ cls: 'na', icon: d.x > 0 ? '▲' : d.x < 0 ? '▼' : '=', label: (d.x >= 0 ? '+' : '−') + num(Math.abs(d.kind === 'pct' ? d.x * 100 : d.x), 1) + (d.kind === 'pct' ? '%' : ' điểm') }) : brDelta(d.x, k.upGood !== false, d.kind);
+    return '<div class="kp"><div class="kp-l">' + esc(k.label) + '</div><div class="kp-v">' + (k.cur == null || !isFinite(k.cur) ? '<span class="muted">' + M.NODATA + '</span>' : k.fmt(k.cur)) + '</div>' +
+      '<div class="kp-d">' + bd + (d && k.kind === 'flow' ? ' <span class="kp-n">theo bình quân ngày</span>' : '') + '</div>' +
+      '<div class="kp-p">Kỳ trước: ' + (k.prevGap ? '<span class="warn-t">' + esc(k.prevGap) + '</span>' : k.prev == null || !isFinite(k.prev) ? '—' : k.fmt(k.prev)) + '</div>' + (k.sub ? '<div class="kp-s">' + k.sub + '</div>' : '') + '</div>';
+  }
+  var fRoas = function (x) { return num(x, 2); }, fPct1 = function (x) { return M.fmtPct(x, 1); }, fPct2 = function (x) { return M.fmtPct(x, 2); }, fInt = function (x) { return num(x, 0); };
+  var SPECS = {};
+  SPECS.overview = function (ctx) {
+    var s = ctx.ads, p = M.ads(ctx.cube, prevF(ctx)), th = ctx.thresholds, ref = ctx.official != null ? ctx.official : th[0];
+    var t = ctx.targets.filter(function (x) { return x.t === ref; })[0];
+    var msg = !s.n ? 'Kỳ này chưa có báo cáo quảng cáo nên chưa tính được ROAS.' : 'ROAS cả kỳ <b>' + num(s.roas, 2) + '</b> – ' + (s.roas >= ref ? 'đạt' : 'chưa đạt') + ' mốc ' + tf(ref) + (ctx.official == null ? ' (mốc tham khảo, chưa chọn mốc chính thức)' : '') +
+      (t && t.shortfall > 0 ? '; với mức chi hiện tại còn thiếu <b>' + sMoney(t.shortfall) + '</b> doanh thu để đạt mốc' : '') + '.';
+    // báo cáo chiến dịch chỉ đo được phần chi phí có báo cáo: so với chi phí thực tế trong file Cost
+    var acC = ctx.rec.acct, acP = M.reconcile(ctx.cube, prevF(ctx), null).acct;
+    var covC = s.n && acC.n && acC.amount > 0 ? s.cost / acC.amount : null, covP = p.n && acP.n && acP.amount > 0 ? p.cost / acP.amount : null;
+    if (covC != null && covC < 0.8) msg += ' Lưu ý: báo cáo chiến dịch mới phủ <b>' + M.fmtPct(Math.min(1, covC), 0) + '</b> chi phí quảng cáo thực tế (file Cost ' + sMoney(acC.amount) + '), ROAS chỉ phản ánh phần chi phí này.';
+    var gapP = covP != null && covP < 0.8 ? 'báo cáo chiến dịch chỉ phủ ' + M.fmtPct(Math.min(1, covP), 0) + ' chi phí' : (!p.n ? 'chưa có báo cáo' : null);
+    var out = { prevCover: adsDays(p), title: 'Quảng cáo – hiệu quả ROAS', question: 'Tiền quảng cáo có mang về đủ doanh thu theo mục tiêu không?', message: msg, kpis: [
+      { label: 'Chi phí quảng cáo', cur: s.n ? s.cost : null, prev: p.n ? p.cost : null, kind: 'flow', curDays: adsDays(s), prevDays: adsDays(p), fmt: sMoney, neutral: true },
+      { label: 'Doanh thu gộp từ quảng cáo', cur: s.n ? s.rev : null, prev: p.n ? p.rev : null, kind: 'flow', curDays: adsDays(s), prevDays: adsDays(p), fmt: sMoney },
+      { label: 'ROAS', cur: s.roas, prev: p.roas, kind: 'ratio', fmt: fRoas, sub: 'mốc ' + tf(ref) },
+      { label: 'CIR (chi phí ÷ doanh thu)', cur: s.cir, prev: p.cir, kind: 'pct', upGood: false, fmt: fPct1 },
+      { label: 'Chi phí trên mỗi đơn SKU', cur: s.cpo, prev: p.cpo, kind: 'ratio', upGood: false, fmt: money }] };
+    if (gapP) out.kpis.forEach(function (k) { k.prevGap = gapP; k.ownPrev = 1; });
+    out.covNote = covC != null && covC < 0.8 ? ' Báo cáo chiến dịch phủ ' + M.fmtPct(Math.min(1, covC), 0) + ' chi phí thực tế.' : '';
+    return out;
+  };
+  SPECS.roas = function (ctx) {
+    var o = SPECS.overview(ctx), s = ctx.ads, th = ctx.thresholds;
+    o.title = 'Chiến dịch quảng cáo'; o.question = 'Chiến dịch nào đang kéo ROAS xuống và thiếu bao nhiêu doanh thu?';
+    if (s.n && s.hasCampaign) {
+      var rk = M.ranking(s, th, ctx.rankIndex), nC = s.byCampaign.filter(function (c) { return c.ent && c.cost > 0; }).length;
+      o.message = (rk.length ? '<b>' + rk.length + '/' + nC + '</b> chiến dịch có chi phí đang dưới mốc ROAS ' + tf(th[ctx.rankIndex]) + '; thiếu nhiều nhất là <b>' + esc(rk[0].name) + '</b> (' + sMoney(rk[0].short[ctx.rankIndex]) + ').' : 'Mọi chiến dịch có chi phí đều đạt mốc ROAS ' + tf(th[ctx.rankIndex]) + '.') + (o.covNote || '');
+    }
+    return o;
+  };
+  SPECS.shop = function (ctx) {
+    var sp = ctx.shop, p = M.shop(ctx.cube, prevF(ctx)), d1 = sp.byDay.length, d0 = p.byDay.length;
+    var top = sp.channels.slice().sort(function (a, b) { return b.value - a.value; })[0];
+    var conv = function (x) { return x.visitors > 0 ? x.orders / x.visitors : null; };
+    var msg = !sp.n ? 'Kỳ này chưa có file Phân tích shop.' : 'Doanh số đặt hàng <b>' + sMoney(sp.gmv) + '</b> (' + sMoney(sp.gmv / d1) + '/ngày)' + (p.n ? ', ' + brTrend(p.gmv / d0, sp.gmv / d1) + ' so với kỳ trước' : '') +
+      (top && top.value > 0 ? '; kênh lớn nhất là ' + esc(lcFirst(top.label)) + ' (' + M.fmtPct(top.share, 0) + ')' : '') + '.';
+    return { prevCover: d0, title: 'Doanh số và khách hàng', question: 'Shop bán được bao nhiêu, qua kênh nào, xu hướng ra sao?', message: msg, kpis: [
+      { label: 'Doanh số đặt hàng (GMV)', cur: sp.n ? sp.gmv : null, prev: p.n ? p.gmv : null, kind: 'flow', curDays: d1, prevDays: d0, fmt: sMoney },
+      { label: 'Số đơn hàng', cur: sp.n ? sp.orders : null, prev: p.n ? p.orders : null, kind: 'flow', curDays: d1, prevDays: d0, fmt: fInt },
+      { label: 'Giá trị mỗi đơn (AOV)', cur: sp.aov, prev: p.aov, kind: 'ratio', fmt: money },
+      { label: 'Khách vào shop', cur: sp.n && sp.visitors ? sp.visitors : null, prev: p.n && p.visitors ? p.visitors : null, kind: 'flow', curDays: d1, prevDays: d0, fmt: fInt },
+      { label: 'Tỷ lệ khách thành đơn', cur: conv(sp), prev: conv(p), kind: 'pct', fmt: fPct2 }] };
+  };
+  SPECS.growth = function (ctx) {
+    var gr = M.growth(ctx.cube, ctx.f, 20000), c = gr.cur, p = gr.prev, msg;
+    if (!gr.hasCur) msg = 'Kỳ này chưa có file Phân tích shop.';
+    else if (!gr.funnel) msg = 'Chưa đủ số liệu hai kỳ để tách nguyên nhân tăng/giảm.';
+    else {
+      var big = gr.funnel.slice().sort(function (x, y) { return Math.abs(y.impact) - Math.abs(x.impact); })[0];
+      msg = 'Doanh số/ngày ' + brTrend(p.gmvD, c.gmvD) + '; yếu tố tác động lớn nhất là <b>' + esc(M.BRIEF_FACTOR[big.key].toLowerCase()) + '</b> (' + brTrend(big.a, big.b) + ', ' + signMoney(big.impact) + '/ngày).';
+    }
+    return { prevCover: p.days, title: 'Nguồn tăng trưởng (cây chỉ số)', question: 'Doanh số tăng hay giảm do đâu, cần bao nhiêu nội dung để bù?', message: msg, kpis: [
+      { label: 'Doanh số mỗi ngày', cur: c.gmvD, prev: p.gmvD, kind: 'ratio', fmt: sMoney },
+      { label: 'Lượt hiển thị sản phẩm / ngày', cur: c.imprD, prev: p.imprD, kind: 'ratio', fmt: fInt },
+      { label: 'Tỷ lệ bấm vào sản phẩm (CTR)', cur: c.ctr, prev: p.ctr, kind: 'pct', fmt: fPct2 },
+      { label: 'Tỷ lệ chốt đơn', cur: c.c2o, prev: p.c2o, kind: 'pct', fmt: fPct2 },
+      { label: 'Giá trị mỗi đơn', cur: c.aov, prev: p.aov, kind: 'ratio', fmt: money }] };
+  };
+  SPECS.content = function (ctx) {
+    var cube = ctx.cube, pf = prevF(ctx), vl = M.videoList(cube, ctx.f), pvl = M.videoList(cube, pf), ll = M.liveList(cube, ctx.f), pll = M.liveList(cube, pf), aff = ctx.aff, paff = M.affiliate(cube, pf);
+    var vOk = vl.nDays >= 7 && pvl.nDays >= 7, lOk = ll.nDays >= 7 && pll.nDays >= 7, parts = [];
+    if (vl.n) parts.push('Video: ' + num(vl.newPerDay, 1) + ' video mới/ngày, trung vị ' + num(vl.medianVVNew, 0) + ' lượt xem mỗi video mới (định mức 20.000)');
+    if (ll.n) parts.push('LIVE: ' + num(ll.hours / ll.nDays, 1) + ' giờ/ngày, ' + sMoney(ll.gmvPerHour) + ' mỗi giờ');
+    if (aff.n) parts.push('nhà sáng tạo liên kết mang về ' + sMoney(aff.gmv));
+    return { title: 'Nội dung và nhà sáng tạo', question: 'Video, LIVE và nhà sáng tạo đóng góp bao nhiêu, năng suất ra sao?', message: parts.length ? ucFirst(parts.join('; ')) + '.' : 'Kỳ này chưa có danh sách video, phiên LIVE hay số liệu liên kết.', kpis: [
+      { label: 'Video mới đăng / ngày', cur: vl.n ? vl.newPerDay : null, prev: vOk ? pvl.newPerDay : null, kind: 'ratio', fmt: function (x) { return num(x, 1); } },
+      { label: 'Lượt xem trung vị / video mới', cur: vl.n ? vl.medianVVNew : null, prev: vOk ? pvl.medianVVNew : null, kind: 'ratio', fmt: fInt, sub: 'định mức 20.000' },
+      { label: 'Doanh số / 1.000 lượt xem video', cur: vl.n ? vl.gpm : null, prev: vOk ? pvl.gpm : null, kind: 'ratio', fmt: money },
+      { label: 'Giờ LIVE / ngày', cur: ll.n ? ll.hours / ll.nDays : null, prev: lOk ? pll.hours / pll.nDays : null, kind: 'ratio', fmt: function (x) { return num(x, 1); } },
+      { label: 'Doanh số / giờ LIVE', cur: ll.n ? ll.gmvPerHour : null, prev: lOk ? pll.gmvPerHour : null, kind: 'ratio', fmt: sMoney },
+      { label: 'Doanh số qua nhà sáng tạo', cur: aff.n ? aff.gmv : null, prev: paff.n ? paff.gmv : null, kind: 'flow', curDays: covDays(aff.coverage), prevDays: covDays(paff.coverage), fmt: sMoney }] };
+  };
+  SPECS.adsctl = function (ctx) {
+    var ac = ctx.ac, pf = prevF(ctx), prc = M.reconcile(ctx.cube, pf, null), sp = ctx.shop, psp = M.shop(ctx.cube, pf), tp = ctx.rec.topup;
+    var msg = ac.costFile == null ? 'Kỳ này chưa có file Chi phí (Cost) của Business Center.' : 'Chi phí quảng cáo theo file Cost <b>' + sMoney(ac.costFile) + '</b>' +
+      (ac.costToGmv != null ? ', bằng ' + M.fmtPct(ac.costToGmv, 1) + ' doanh số toàn shop' : '') + (ac.uncoveredShare != null ? '; ' + M.fmtPct(ac.uncoveredShare, 0) + ' chi phí chưa có báo cáo chiến dịch để đo hiệu quả' : '') + '.';
+    var pCost = prc.acct.n ? prc.acct.amount : null;
+    return { prevCover: covDays(prc.acct.coverage), title: 'Kiểm soát chi phí quảng cáo', question: 'Tiền quảng cáo đã chi có khớp giữa các nguồn và có báo cáo hiệu quả đi kèm không?', message: msg, kpis: [
+      { label: 'Chi phí theo file Cost', cur: ac.costFile, prev: pCost, kind: 'flow', curDays: covDays(ac.costFileCov), prevDays: covDays(prc.acct.coverage), fmt: sMoney, neutral: true },
+      { label: 'Chi phí quảng cáo / doanh số', cur: ac.costToGmv, prev: pCost != null && psp.gmv > 0 ? pCost / psp.gmv : null, kind: 'pct', upGood: false, fmt: fPct1 },
+      { label: 'Chi phí có báo cáo chiến dịch', cur: ac.uncoveredShare != null ? 1 - ac.uncoveredShare : null, prev: null, kind: 'pct', fmt: function (x) { return M.fmtPct(x, 0); } },
+      { label: 'ROAS theo báo cáo chiến dịch', cur: ac.roasCamp, prev: null, kind: 'ratio', fmt: fRoas },
+      { label: 'Tiền thực trả TikTok (nạp + thẻ)', cur: tp.n ? tp.cashOut : null, prev: prc.topup.n ? prc.topup.cashOut : null, kind: 'none', fmt: sMoney, sub: 'nạp tiền theo đợt nên không so theo ngày' }] };
+  };
+  SPECS.acc = function (ctx) {
+    var sr = ctx.stlr, pf = prevF(ctx), psr = M.settlementReport(ctx.cube, pf), o = ctx.orders, po = M.orders(ctx.cube, pf), t = sr.t || {}, pt = psr.t || {};
+    var ok = sr.n && sr.calcDiff === 0 && sr.feeLinesDiff === 0 && (sr.revDiff == null || sr.revDiff === 0);
+    var msg = !sr.n ? 'Kỳ này chưa có báo cáo quyết toán của TikTok.' : 'TikTok đã trả về <b>' + sMoney(t.settlement_total) + '</b>, bằng ' + M.fmtPct(sr.keepRate, 1) + ' tiền hàng; phí sàn và hoa hồng chiếm ' + M.fmtPct(sr.feeRate, 1) + ' doanh thu thuần; các phép đối chiếu nội bộ ' + (ok ? '<b>khớp</b>' : '<b>có chênh lệch</b> (xem mục C)') + '.';
+    var d1 = covDays(sr.coverage), d0 = covDays(psr.coverage);
+    return { prevCover: d0, title: 'Tài chính và đối chiếu', question: 'Doanh thu, phí sàn, tiền về có khớp giữa các nguồn không?', message: msg, kpis: [
+      { label: 'Doanh thu thuần (quyết toán)', cur: sr.n ? t.revenue_total : null, prev: psr.n ? pt.revenue_total : null, kind: 'flow', curDays: d1, prevDays: d0, fmt: sMoney },
+      { label: 'Tiền TikTok trả về', cur: sr.n ? t.settlement_total : null, prev: psr.n ? pt.settlement_total : null, kind: 'flow', curDays: d1, prevDays: d0, fmt: sMoney },
+      { label: 'Phí sàn và hoa hồng / doanh thu thuần', cur: sr.feeRate, prev: psr.feeRate, kind: 'pct', upGood: false, fmt: fPct1 },
+      { label: 'Hoàn tiền / tiền hàng', cur: sr.refundRate, prev: psr.refundRate, kind: 'pct', upGood: false, fmt: fPct1 },
+      { label: 'Đơn bị hủy / tổng đơn', cur: o.cancelRateCount, prev: po.cancelRateCount, kind: 'pct', upGood: false, fmt: fPct1 }] };
+  };
+  V.SPECS = SPECS;
+
+  /* Gắn khung trang cho nội dung đã vẽ trong host (chạy sau khi tab vẽ xong; không tính lại số liệu của tab) */
+  V.decorate = function (host, ctx, tab) {
+    if (!host || !ctx) return;
+    var spec = null;
+    try { spec = SPECS[tab] ? SPECS[tab](ctx) : null; } catch (e) { spec = null; if (window.console) console.error(e); }
+    var f = ctx.f, pf = prevF(ctx);
+    if (spec && spec.prevCover != null) {
+      // kỳ trước thiếu quá 20% số ngày → không so sánh (tránh kết luận sai vì nguồn kỳ trước không đầy đủ)
+      var plen = M.daysBetween(pf.from, pf.to);
+      if (plen > 0 && spec.prevCover / plen < 0.8) spec.kpis.forEach(function (k) { if (!k.ownPrev) k.prevGap = spec.prevCover ? 'thiếu số liệu (' + spec.prevCover + '/' + plen + ' ngày)' : 'chưa có số liệu'; });
+    }
+    if (spec) {
+      var fl = host.querySelector(':scope > .filterline'); if (fl) fl.remove();
+      var head = document.createElement('header'); head.className = 'rp-head';
+      head.innerHTML = '<div class="rp-top"><div><div class="rp-eyebrow">' + esc(spec.title) + ' · ' + esc(ctx.shopLabel) + (ctx.campLabel ? ' · ' + esc(ctx.campLabel) : '') + '</div>' +
+        '<h2 class="rp-title">' + esc(spec.question) + '</h2>' +
+        '<div class="rp-period">Kỳ này <b>' + M.fmtPeriod(f.from, f.to) + '</b> · so với kỳ trước ' + M.fmtPeriod(pf.from, pf.to) + '</div></div>' +
+        '<button type="button" class="secondary rp-toggle">Mở tất cả bảng chi tiết</button></div>' +
+        '<p class="rp-msg"><span class="rp-msg-k">Kết luận</span> ' + spec.message + '</p>' +
+        (spec.kpis && spec.kpis.length ? '<div class="kps">' + spec.kpis.map(kTile).join('') + '</div><div class="rp-legend">Mũi tên xanh: tốt cho công ty · đỏ: xấu · xám: chỉ để theo dõi. Số tiền, số lượng so theo bình quân ngày; tỷ lệ so bằng điểm %.</div>' : '');
+      host.insertBefore(head, host.firstChild);
+      // chia nội dung thành các khối theo tiêu đề h3, đánh số
+      var kids = Array.prototype.slice.call(host.childNodes).filter(function (n) { return n !== head; });
+      var cur = null, n = 0, intro = null;
+      kids.forEach(function (node) {
+        if (node.nodeType === 1 && node.tagName === 'H3') {
+          cur = document.createElement('section'); cur.className = 'rp-sec'; n++;
+          var hd = document.createElement('div'); hd.className = 'rp-sec-head';
+          var txt = node.textContent.trim(), lettered = /^([A-Z]\d*|\d+)[.)]\s/.test(txt);
+          hd.innerHTML = (lettered ? '' : '<span class="rp-num">' + n + '</span>') + '<h3>' + node.innerHTML + '</h3>';
+          cur.appendChild(hd); host.insertBefore(cur, node); node.remove(); return;
+        }
+        if (cur) cur.appendChild(node);
+        else { if (!intro) { intro = document.createElement('section'); intro.className = 'rp-sec rp-intro'; host.insertBefore(intro, node); } intro.appendChild(node); }
+      });
+      // khối tóm tắt cũ trùng với thẻ chỉ số mới thì bỏ
+      if (intro && spec.kpis && spec.kpis.length) Array.prototype.forEach.call(intro.querySelectorAll(':scope > .hero'), function (x) { x.remove(); });
+      if (intro && !intro.textContent.trim() && !intro.querySelector('svg,input,table')) intro.remove();
+      else if (intro && intro.querySelector('.tiles, .hero, table')) { var ih = document.createElement('div'); ih.className = 'rp-sec-head'; ih.innerHTML = '<h3>Tổng hợp số liệu kỳ này</h3>'; intro.insertBefore(ih, intro.firstChild); }
+      // bảng dài: bảng đầu tiên của mỗi khối luôn hiện (trừ khi rất dài); các bảng phụ dài thu gọn, bấm để xem
+      Array.prototype.slice.call(host.querySelectorAll('.rp-sec .tbl-wrap')).forEach(function (w) {
+        if (w.closest('details') || w.closest('.manual')) return;
+        var sec = w.closest('.rp-sec'), first = sec && sec.querySelector('.tbl-wrap') === w;
+        var rows = w.querySelectorAll('tbody tr').length; if (rows <= (first ? 40 : 12)) return;
+        var d = document.createElement('details'); d.className = 'more';
+        d.innerHTML = '<summary>Xem bảng chi tiết · ' + num(rows) + ' dòng</summary>';
+        w.parentNode.insertBefore(d, w); d.appendChild(w);
+      });
+      var tg = head.querySelector('.rp-toggle'), all = host.querySelectorAll('details.more');
+      if (!all.length) tg.remove();
+      else tg.addEventListener('click', function () { var open = tg.getAttribute('data-open') !== '1'; Array.prototype.forEach.call(host.querySelectorAll('details.more'), function (x) { x.open = open; }); tg.setAttribute('data-open', open ? '1' : '0'); tg.textContent = open ? 'Thu gọn bảng chi tiết' : 'Mở tất cả bảng chi tiết'; });
+    }
+    // thuật ngữ xuất hiện trên trang
+    var text = host.textContent || '', used = V.GLOSSARY.filter(function (g) { return text.indexOf(g[0]) >= 0; });
+    if (used.length) {
+      var gl = document.createElement('details'); gl.className = 'card rp-gloss';
+      gl.innerHTML = '<summary><strong>Giải thích thuật ngữ trên trang</strong> <span class="muted small">(' + used.length + ' thuật ngữ)</span></summary><dl>' + used.map(function (g) { return '<dt>' + esc(g[0]) + '</dt><dd>' + esc(g[1]) + '</dd>'; }).join('') + '</dl>';
+      host.appendChild(gl);
+    }
+  };
+  if (typeof window !== 'undefined' && !V._printHook) {
+    V._printHook = 1;
+    window.addEventListener('beforeprint', function () { Array.prototype.forEach.call(document.querySelectorAll('details.more, details.rp-gloss, details.br-notes'), function (d) { d.open = true; }); });
+  }
 
   root.TTSV = V;
 })(window);

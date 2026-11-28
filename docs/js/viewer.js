@@ -2,7 +2,8 @@
 (function (root) {
   'use strict';
   var M = root.TTSM, V = root.TTSV, esc = V.esc, W = {};
-  var TABS = [['brief', 'Bản tin điều hành'], ['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['content', 'Video & Liên kết']];
+  var TABS = [['brief', 'Bản tin điều hành'], ['shop', 'Doanh số & khách hàng'], ['growth', 'Nguồn tăng trưởng'], ['content', 'Nội dung & nhà sáng tạo'], ['overview', 'Quảng cáo – ROAS'], ['roas', 'Chiến dịch quảng cáo'], ['adsctl', 'Kiểm soát chi phí QC'], ['acc', 'Tài chính & đối chiếu']];
+  var FN = { brief: 'brief', shop: 'shop', growth: 'growth', content: 'content', overview: 'overview', roas: 'roas', adsctl: 'adsControl', acc: 'accounting' };
 
   /* host: phần tử chứa; data: {meta, cube, f, remaining, rankIndex} */
   W.mount = function (host, data) {
@@ -20,7 +21,7 @@
         '<label>Chiến dịch <select data-vf="ent"' + (ck.length ? '' : ' disabled') + '><option value="">' + (ck.length ? 'Tất cả chiến dịch' : 'Không có dữ liệu chiến dịch') + '</option>' + ck.map(function (k) { return '<option value="' + esc(k) + '"' + (f.ent === k ? ' selected' : '') + '>' + esc(camps[k]) + '</option>'; }).join('') + '</select></label>' +
         '<span class="hint">Kỳ dữ liệu trong báo cáo: ' + M.fmtPeriod(LIM.from, LIM.to) + '</span>';
       var ctx = V.compute(cube, S.f, { remaining: S.remaining, rankIndex: S.rankIndex });
-      if (S.tab === 'brief') V.brief(mainEl, ctx); else if (S.tab === 'overview') V.overview(mainEl, ctx); else if (S.tab === 'shop') V.shop(mainEl, ctx); else if (S.tab === 'roas') V.roas(mainEl, ctx); else if (S.tab === 'adsctl') V.adsControl(mainEl, ctx); else if (S.tab === 'growth') V.growth(mainEl, ctx); else if (S.tab === 'acc') V.accounting(mainEl, ctx); else V.content(mainEl, ctx);
+      V[FN[S.tab] || 'brief'](mainEl, ctx); V.decorate(mainEl, ctx, S.tab);
     }
     host.addEventListener('click', function (ev) { var b = ev.target.closest('[data-vtab]'); if (b) { S.tab = b.getAttribute('data-vtab'); render(); } });
     host.addEventListener('change', function (ev) {

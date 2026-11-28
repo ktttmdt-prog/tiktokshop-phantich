@@ -12,13 +12,14 @@ table{border-collapse:collapse;width:100%;font-size:13.5px;margin:8px 0}th,td{bo
 .box{background:#fff8e6;border-left:4px solid #fab219;padding:8px 12px;margin:10px 0}.ok{background:#eaf7ea;border-left:4px solid #0ca30c;padding:8px 12px;margin:10px 0}
 .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0}.flow div{border:1px solid #e1e0d9;border-radius:10px;padding:10px 12px;background:#fff}
 .flow b{display:block;margin-bottom:2px}
+pre.tree{background:#f0efec;border-radius:8px;padding:10px 12px;font-size:12.5px;line-height:1.5;overflow-x:auto}
 ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 @media (prefers-color-scheme:dark){body{background:#1a1a19;color:#f0efec}th{background:#2c2c2a}th,td{border-color:#383835}code,kbd{background:#2c2c2a}.box{background:#3a3014}.ok{background:#16301a}.muted{color:#c3c2b7}.flow div{background:#222;border-color:#383835}}
 </style>
 </head>
 <body>
 <h1>Phân tích TikTok Shop – Hướng dẫn sử dụng (bản web)</h1>
-<p class="muted">Dành cho kế toán, quản lý TMĐT, ban lãnh đạo và nhân sự gửi dữ liệu. <a href="./">← Quay lại ứng dụng</a> · <a href="huong_dan_xuat_du_lieu.html">Quy trình tải dữ liệu TikTok từng bước</a></p>
+<p class="muted">Dành cho kế toán, quản lý TMĐT, ban lãnh đạo và nhân sự gửi dữ liệu. <a href="./">← Quay lại ứng dụng</a> · <a href="huong_dan_xuat_du_lieu.html">Quy trình tải dữ liệu TikTok từng bước</a> · <a href="huong_dan_doc_bao_cao.html">Cách đọc báo cáo (dành cho chủ đầu tư)</a></p>
 
 <h2>1. Ứng dụng chạy như thế nào</h2>
 <ul>
@@ -53,7 +54,43 @@ ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 <li>Lần đầu mở lại máy, Chrome có thể hỏi lại quyền đọc thư mục: bấm <b>Cho phép đọc thư mục</b> trên dải thông báo (chọn “Cho phép mọi lần truy cập” nếu Chrome hỏi để không phải bấm lại).</li>
 <li>Cách khác: chuột phải file Excel/CSV → <i>Mở bằng</i> → <b>TikTok Shop</b> (sau khi đã cài ứng dụng) → file vào thẳng tab Nhập dữ liệu.</li>
 </ol>
-<div class="ok">Một file được bỏ vào thư mục nhiều lần, hay tải lại file cùng kỳ, không làm số liệu bị cộng 2 lần: dòng giống hệt được nhận là trùng và bỏ qua; dòng thay đổi (vd ngày chưa kết thúc) được cập nhật.</div>
+<div class="ok">Một file được bỏ vào thư mục nhiều lần, hay tải lại file cùng kỳ, không làm số liệu bị cộng 2 lần: dòng giống hệt được nhận là trùng và bỏ qua; dòng thay đổi (vd ngày chưa kết thúc) được cập nhật. File thiếu cột so với dữ liệu đã có (TikTok đôi khi rút gọn cột) không xóa số cũ của các cột thiếu.</div>
+<p><b>Cấu trúc thư mục đề xuất</b> (đặt tên đúng như dưới để ứng dụng tự nhận phạm vi):</p>
+<pre class="tree">DU LIEU TIKTOK
+├─ PHAN TICH SHOP      Shop Analytics_Key metrics_…xlsx
+├─ QUYET TOAN          income_…xlsx (file gốc, hoặc bản chỉ có sheet “Báo cáo”)
+├─ DON HANG            Tất cả đơn hàng-…xlsx
+├─ QUANG CAO           Cost_…xlsx, Transaction_…xlsx, Product/Live campaign data …xlsx
+├─ VIDEO
+│  ├─ Tất cả kênh            Video performance Key metrics_…xlsx
+│  └─ Tài khoản kết nối      Video Performance List_…xlsx
+├─ LIVE
+│  └─ Tài khoản kết nối      Live Analysis…xlsx
+├─ LIEN KET            Transaction_Analysis_Core_Metrics_…xlsx (chỉ xuất khi tháng đã hết)
+└─ _khong nhap         bản trùng, file nháp (thư mục bắt đầu bằng “_” không được đọc)</pre>
+
+<h2 id="doc-bao-cao">1C. Bố cục báo cáo và cách đọc</h2>
+<p>Báo cáo gồm 8 trang, xếp theo thứ tự người đọc cần: bức tranh chung → doanh số → nguyên nhân → nội dung → quảng cáo → tài chính. Bốn trang <i>Bảng chi tiết, Nhập dữ liệu, Lịch sử nhập, Cài đặt &amp; chia sẻ</i> là công cụ của kế toán, không có trong file gửi lãnh đạo.</p>
+<div class="tw"><table>
+<tr><th>Trang</th><th>Câu hỏi trang trả lời</th><th>Con số then chốt</th></tr>
+<tr><td><b>Bản tin điều hành</b></td><td>Kỳ này kinh doanh ra sao, tiền đi đâu, cần quyết gì?</td><td>Trên 100 đồng tiền hàng còn lại bao nhiêu đồng; lãi đóng góp; nguyên nhân tăng/giảm; việc cần quyết định</td></tr>
+<tr><td><b>Doanh số &amp; khách hàng</b></td><td>Shop bán được bao nhiêu, qua kênh nào, xu hướng ra sao?</td><td>Doanh số đặt hàng (GMV), số đơn, giá trị mỗi đơn, khách vào shop, tỷ lệ khách thành đơn</td></tr>
+<tr><td><b>Nguồn tăng trưởng</b></td><td>Doanh số tăng hay giảm do đâu, cần bao nhiêu nội dung để bù?</td><td>Lượt hiển thị, tỷ lệ bấm, tỷ lệ chốt đơn, giá trị đơn; quy đổi ra số video / giờ LIVE</td></tr>
+<tr><td><b>Nội dung &amp; nhà sáng tạo</b></td><td>Video, LIVE và nhà sáng tạo đóng góp bao nhiêu, năng suất ra sao?</td><td>Video mới/ngày, lượt xem mỗi video, doanh số trên 1.000 lượt xem, giờ LIVE, doanh số mỗi giờ LIVE</td></tr>
+<tr><td><b>Quảng cáo – ROAS</b></td><td>Tiền quảng cáo có mang về đủ doanh thu theo mục tiêu không?</td><td>Chi phí, doanh thu gộp, ROAS so với mốc, CIR, doanh thu còn thiếu</td></tr>
+<tr><td><b>Chiến dịch quảng cáo</b></td><td>Chiến dịch nào đang kéo ROAS xuống, thiếu bao nhiêu?</td><td>Số chiến dịch dưới mốc, xếp hạng theo doanh thu còn thiếu</td></tr>
+<tr><td><b>Kiểm soát chi phí QC</b></td><td>Tiền quảng cáo đã chi có khớp giữa các nguồn, có báo cáo hiệu quả đi kèm không?</td><td>Chi phí theo file Cost, phần chưa có báo cáo chiến dịch, chi phí quảng cáo / doanh số</td></tr>
+<tr><td><b>Tài chính &amp; đối chiếu</b></td><td>Doanh thu, phí sàn, tiền về có khớp giữa các nguồn không?</td><td>Doanh thu thuần, tiền TikTok trả về, phí sàn / doanh thu, tỷ lệ hoàn, tỷ lệ hủy, các phép kiểm khớp</td></tr>
+</table></div>
+<p><b>Cách đọc một trang</b> (trang nào cũng cùng thứ tự):</p>
+<ol>
+<li><b>Câu hỏi</b> ở đầu trang – trang này trả lời câu hỏi đó.</li>
+<li><b>Kết luận</b> – một câu nêu điều quan trọng nhất, tính tự động từ số liệu.</li>
+<li><b>Thẻ chỉ số</b>: số kỳ này (chữ lớn), dòng “Kỳ trước”, và nhãn chênh lệch. Mũi tên <span style="color:#0ca30c">xanh</span> là biến động tốt cho công ty, <span style="color:#d03b3b">đỏ</span> là xấu, xám là chỉ để theo dõi (vd chi phí quảng cáo tăng chưa chắc là xấu). Số tiền, số lượng so theo <b>bình quân ngày</b> để tháng đang chạy vẫn so được với tháng đủ; tỷ lệ so bằng <b>điểm %</b> (từ 20% lên 22% là +2 điểm).</li>
+<li><b>Kỳ trước thiếu số liệu</b>: nếu nguồn của kỳ trước phủ dưới 80% số ngày (hoặc báo cáo chiến dịch phủ dưới 80% chi phí thực tế), thẻ ghi “thiếu số liệu” và không so sánh, để tránh kết luận sai.</li>
+<li><b>Các khối đánh số</b> – đọc từ trên xuống; bảng dài được thu gọn, bấm <i>Xem bảng chi tiết</i> (hoặc nút <i>Mở tất cả bảng chi tiết</i> ở đầu trang) để xem đủ. Khi in, mọi bảng tự mở.</li>
+<li><b>Giải thích thuật ngữ</b> ở cuối trang – chỉ liệt kê thuật ngữ xuất hiện trên trang đó.</li>
+</ol>
 
 <h2>2. Ba vai trò</h2>
 <div class="flow">
@@ -67,7 +104,7 @@ ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 <h3>3.1. Lần đầu</h3>
 <ol>
 <li>Mở link ứng dụng → chọn <b>Kế toán</b>. Máy này sẽ nhớ lựa chọn cho lần sau.</li>
-<li>Vào <b>Chia sẻ, sao lưu &amp; cài đặt</b>: đặt các mốc ROAS (mặc định 12 và 13), chọn <i>mốc chính thức</i> khi đã chốt chính sách thưởng (chưa chọn thì báo cáo chỉ so sánh tham khảo, không kết luận đạt thưởng).</li>
+<li>Vào <b>Cài đặt &amp; chia sẻ</b>: đặt các mốc ROAS (mặc định 12 và 13), chọn <i>mốc chính thức</i> khi đã chốt chính sách thưởng (chưa chọn thì báo cáo chỉ so sánh tham khảo, không kết luận đạt thưởng).</li>
 <li>Bấm <b>Tạo link cho nhân sự</b> nếu có nhân sự gửi dữ liệu → bấm <b>Tải bản sao lưu</b> ngay để giữ khóa mở gói.</li>
 </ol>
 <h3>3.2. Nhập dữ liệu</h3>
@@ -97,7 +134,7 @@ ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 <li><b>Doanh số tăng/giảm vì đâu</b>: tách theo độ phủ (lượt hiển thị), sức hút (tỷ lệ bấm), chốt đơn, giá trị đơn và theo kênh bán.</li>
 <li>Năng suất nội dung (video, LIVE), chất lượng doanh thu và vận hành (hoàn, hủy, gửi muộn, chat), xu hướng theo tháng, <b>việc cần quyết định</b>, cách đọc số liệu và các phép kiểm khớp số.</li>
 </ul>
-<p><b>Giá vốn</b>: vào <b>Chia sẻ, sao lưu &amp; cài đặt</b> → <i>Giá vốn và chi phí kênh</i> → nhập từ ngày, đến ngày (đúng kỳ quyết toán, vd 01/10 – 31/10), giá vốn hàng bán và chi phí vận hành kênh theo sổ kế toán. Kỳ chưa có số thực tế có thể dùng <i>Tỷ lệ giá vốn ước tính</i> – bản tin ghi rõ “ước tính”. Chưa nhập giá vốn thì bản tin dừng ở “còn lại trước giá vốn”.</p>
+<p><b>Giá vốn</b>: vào <b>Cài đặt &amp; chia sẻ</b> → <i>Giá vốn và chi phí kênh</i> → nhập từ ngày, đến ngày (đúng kỳ quyết toán, vd 01/10 – 31/10), giá vốn hàng bán và chi phí vận hành kênh theo sổ kế toán. Kỳ chưa có số thực tế có thể dùng <i>Tỷ lệ giá vốn ước tính</i> – bản tin ghi rõ “ước tính”. Chưa nhập giá vốn thì bản tin dừng ở “còn lại trước giá vốn”.</p>
 <p class="muted">Cơ sở số liệu: doanh thu và phí theo ngày quyết toán (báo cáo quyết toán của TikTok); quảng cáo theo file Chi phí của Business Center, gồm thuế nhà cung cấp tự thu (không được khấu trừ); booking theo danh sách nội bộ. Báo cáo lãnh đạo kèm số liệu tổng hợp của kỳ liền trước để so sánh và doanh số theo tháng để vẽ xu hướng.</p>
 <h3>3.5. Nhận gói dữ liệu từ nhân sự</h3>
 <p>Tab <b>Nhập dữ liệu</b> → chọn shop → chọn file <code>.ttsgoi</code>. Ứng dụng giải mã, hiện tên người gửi và ghi chú, rồi đưa từng file vào thẻ xem trước như bình thường. Lịch sử nhập ghi tên người gửi.</p>
@@ -113,7 +150,7 @@ ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 
 <h2>5. Lãnh đạo xem báo cáo</h2>
 <ul>
-<li><b>Máy tính</b>: mở file <code>.html</code> nhận được (nhấp đúp) → nhập mật khẩu → xem các tab Tổng quan, Hiệu quả shop, ROAS &amp; chiến dịch, Kiểm soát kế toán, Video &amp; Liên kết. Lọc được theo ngày/shop/chiến dịch trong phạm vi kỳ của báo cáo.</li>
+<li><b>Máy tính</b>: mở file <code>.html</code> nhận được (nhấp đúp) → nhập mật khẩu → xem 8 trang báo cáo (mở đầu bằng Bản tin điều hành – xem mục 1C và tài liệu <a href="huong_dan_doc_bao_cao.html">Cách đọc báo cáo dành cho chủ đầu tư</a>). Lọc được theo ngày/shop/chiến dịch trong phạm vi kỳ của báo cáo.</li>
 <li><b>Điện thoại</b>: nếu điện thoại không mở trực tiếp được file, mở link ứng dụng → <b>Lãnh đạo – xem báo cáo</b> → chọn file → nhập mật khẩu. Báo cáo gần nhất được nhớ trên máy (vẫn cần mật khẩu khi mở lại).</li>
 <li>Sai mật khẩu hoặc file bị sửa: ứng dụng từ chối mở.</li>
 </ul>
@@ -139,7 +176,7 @@ ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size:13px}
 <tr><td>Đơn hàng</td><td>Seller Center → Đơn hàng → Xuất</td><td>Dòng SKU, tổng hợp theo ngày tạo đơn. Không lưu tên, SĐT, địa chỉ người mua</td><td>Mã đơn + SKU ID</td></tr>
 <tr><td>Quyết toán / Thu nhập</td><td>Tài chính → Sao kê</td><td>Theo ngày quyết toán</td><td>Mã + loại + ngày quyết toán</td></tr>
 </table></div>
-<p class="muted">Bảng ánh xạ đầy đủ (tên cột nguồn → chỉ tiêu) có trong mục <i>Chia sẻ, sao lưu &amp; cài đặt</i> của ứng dụng.</p>
+<p class="muted">Bảng ánh xạ đầy đủ (tên cột nguồn → chỉ tiêu) có trong mục <i>Cài đặt &amp; chia sẻ</i> của ứng dụng.</p>
 
 <h2>8. Chống cộng trùng và truy ngược</h2>
 <ul>

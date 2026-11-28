@@ -681,7 +681,7 @@
         Object.keys(pl.lines).forEach(function (k) { if (k === 'vat_withheld' || k === 'pit_withheld') return; var a = pv.net > 0 ? -(pv.lines[k] || 0) / pv.net : 0, b = -(pl.lines[k] || 0) / pl.net; if (!top || b - a > top.d) top = { k: k, d: b - a }; });
         d.push({ k: 'warn', t: 'Phí sàn, khuyến mãi và hoa hồng tăng từ ' + pp1(pv.feeRate) + ' lên ' + pp1(pl.feeRate) + ' doanh thu thuần' + (top && top.d > 0 ? '; tăng nhiều nhất là ' + (M.STLR_LABEL[top.k] || top.k).toLowerCase() + ' (+' + M.fmtNum(top.d * 100, 1) + ' điểm)' : '') + '. Rà soát các chương trình đang đăng ký.' });
       }
-      if (pl.adRate != null && pv.adRate != null && pl.adRate - pv.adRate >= 0.005 && gr.hasPrev && gr.gmvDelta < 0) d.push({ k: 'warn', t: 'Quảng cáo và booking tăng từ ' + pp1(pv.adRate) + ' lên ' + pp1(pl.adRate) + ' doanh thu thuần trong khi doanh số/ngày giảm: duyệt lại ngân sách theo hiệu quả từng tài khoản (tab Kiểm soát ads).' });
+      if (pl.adRate != null && pv.adRate != null && pl.adRate - pv.adRate >= 0.005 && gr.hasPrev && gr.gmvDelta < 0) d.push({ k: 'warn', t: 'Quảng cáo và booking tăng từ ' + pp1(pv.adRate) + ' lên ' + pp1(pl.adRate) + ' doanh thu thuần trong khi doanh số/ngày giảm: duyệt lại ngân sách theo hiệu quả từng tài khoản (trang Kiểm soát chi phí QC).' });
     }
     if (h) {
       if (h.late != null && h.late > M.healthTargets.late) d.push({ k: 'bad', t: 'Gửi hàng muộn ' + pp1(h.late) + ' (TikTok yêu cầu ≤ 4%, ghi nhận ' + fmtD(h.date) + '): rủi ro bị giảm hiển thị. Kho cần cam kết thời gian bàn giao vận chuyển.' });

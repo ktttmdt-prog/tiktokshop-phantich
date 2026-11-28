@@ -3,7 +3,7 @@
 (function () {
   'use strict';
   var K = window.TTSK, SC = window.TTSS, D = window.TTSD, I = window.TTSI, Q = window.TTSQ, R = window.TTSR, X = window.TTSX, Z = window.TTSZ, M = window.TTSM, V = window.TTSV, W = window.TTSViewer, esc = V.esc;
-  var S = { mode: null, cube: null, f: { from: '', to: '', shop: '', ent: '' }, preset: 'latest', tab: 'overview', remaining: 0, rankIndex: 0, detail: { dataset: 'ads_campaign', page: 0, q: '' }, cards: [], staffKey: null };
+  var S = { mode: null, cube: null, f: { from: '', to: '', shop: '', ent: '' }, preset: 'latest', tab: 'brief', remaining: 0, rankIndex: 0, detail: { dataset: 'ads_campaign', page: 0, q: '' }, cards: [], staffKey: null };
   var $ = function (s, el) { return (el || document).querySelector(s); }, $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
   var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   var actions = {};
@@ -168,7 +168,9 @@
   }
 
   // ================= KẾ TOÁN =================
-  var TABS = [['overview', 'Tổng quan'], ['brief', 'Bản tin điều hành'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['detail', 'Bảng chi tiết'], ['content', 'Video & Liên kết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Chia sẻ, sao lưu & cài đặt']];
+  /* Thứ tự theo câu hỏi của người đọc báo cáo: bức tranh chung → doanh số → nguyên nhân → nội dung → quảng cáo → tài chính; công cụ kế toán tách riêng */
+  var TABS = [['brief', 'Bản tin điều hành'], ['shop', 'Doanh số & khách hàng'], ['growth', 'Nguồn tăng trưởng'], ['content', 'Nội dung & nhà sáng tạo'], ['overview', 'Quảng cáo – ROAS'], ['roas', 'Chiến dịch quảng cáo'], ['adsctl', 'Kiểm soát chi phí QC'], ['acc', 'Tài chính & đối chiếu'], ['-', 'Công cụ kế toán'], ['detail', 'Bảng chi tiết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Cài đặt & chia sẻ']];
+  var REPORT = { brief: 'brief', shop: 'shop', growth: 'growth', content: 'content', overview: 'overview', roas: 'roas', adsctl: 'adsControl', acc: 'accounting' };
   function startAccountant() {
     S.mode = 'ketoan';
     header('Phân tích TikTok Shop', 'Chế độ kế toán – dữ liệu lưu trong trình duyệt của máy này',
@@ -364,15 +366,15 @@
     if (S.mode !== 'ketoan') return;
     var t = S.tab, main = $('#main');
     $('#tabs').style.display = '';
-    $('#tabs').innerHTML = TABS.map(function (x) { return '<button role="tab" data-tab="' + x[0] + '" aria-selected="' + (t === x[0]) + '">' + x[1] + '</button>'; }).join('');
+    $('#tabs').innerHTML = TABS.map(function (x) { return x[0] === '-' ? '<span class="tab-sep" role="separator">' + esc(x[1]) + '</span>' : '<button role="tab" data-tab="' + x[0] + '" aria-selected="' + (t === x[0]) + '"' + (REPORT[x[0]] ? '' : ' class="tab-tool"') + '>' + esc(x[1]) + '</button>'; }).join('');
     var noF = t === 'import' || t === 'history' || t === 'settings';
     $('#filters').style.display = noF ? 'none' : ''; if (!noF) renderFilters();
     if (window.TTSC) window.TTSC.hideTip();
     var warn = backupBanner();
     if (FD.handle && FD.perm && FD.perm !== 'granted' && t !== 'import') warn += '<div class="banner">Thư mục dữ liệu <strong>' + esc(FD.handle.name) + '</strong> cần được cho phép đọc lại để tự nhập file mới. <button class="link" data-act="fdAllow">Cho phép đọc thư mục</button></div>';
     try {
-      if (t === 'overview') V.overview(main, ctx()); else if (t === 'brief') V.brief(main, ctx()); else if (t === 'shop') V.shop(main, ctx()); else if (t === 'roas') V.roas(main, ctx());
-      else if (t === 'adsctl') V.adsControl(main, ctx()); else if (t === 'growth') V.growth(main, ctx()); else if (t === 'acc') V.accounting(main, ctx()); else if (t === 'content') V.content(main, ctx()); else if (t === 'detail') renderDetail(main);
+      if (REPORT[t]) { var c = ctx(); V[REPORT[t]](main, c); V.decorate(main, c, t); }
+      else if (t === 'detail') renderDetail(main);
       else if (t === 'import') renderImport(main); else if (t === 'history') renderHistory(main); else if (t === 'settings') renderSettings(main);
       if (warn) main.insertAdjacentHTML('afterbegin', warn);
     } catch (e) { main.innerHTML = '<div class="nodata">Lỗi hiển thị: ' + esc(e.message) + '</div>'; console.error(e); }
@@ -410,7 +412,7 @@
     else if (ev.target.getAttribute('data-act') === 'rankIndex') { S.rankIndex = Number(ev.target.value) || 0; render(); }
     else if (id === 'detDs') { S.detail.dataset = ev.target.value; S.detail.page = 0; render(); }
   });
-  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (S.mode === 'ketoan' && ['overview', 'brief', 'shop', 'roas', 'adsctl', 'content'].indexOf(S.tab) >= 0) render(); }, 250); });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (S.mode === 'ketoan' && REPORT[S.tab]) render(); }, 250); });
 
   /* (đã khai báo actions ở đầu file) */
   actions.switchMode = switchMode;
@@ -640,7 +642,7 @@
     h += '<h2>Tình trạng tài khoản shop</h2><div class="card form"><div class="form-row"><label>Ngày<input type="date" id="hlDate" value="' + K.today() + '"></label><label>Điểm tình trạng<input id="hlScore" inputmode="numeric" placeholder="vd: 700"></label>' +
       '<label>Gửi hàng muộn (%)<input id="hlLate" placeholder="vd: 3,5"></label><label>Hài lòng qua chat (%)<input id="hlChat" placeholder="vd: 72,5"></label><label>Vi phạm trong tháng<input id="hlViol" inputmode="numeric" placeholder="vd: 4"></label><label>Sản phẩm bị đóng băng<input id="hlFrozen" inputmode="numeric" placeholder="vd: 1"></label>' +
       '<label class="grow">Ghi chú<input id="hlNote" placeholder="vd: còn 1 vi phạm có thể khiếu nại"></label><button data-act="addHealth">Thêm</button></div>' +
-      '<p class="small muted">Lấy ở Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (mục Tổng quan và Hồ sơ vi phạm). TikTok chưa cho xuất file mục này nên ghi nhận thủ công mỗi tuần; số liệu hiện ở tab Cây chỉ số.</p>' +
+      '<p class="small muted">Lấy ở Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (mục Tổng quan và Hồ sơ vi phạm). TikTok chưa cho xuất file mục này nên ghi nhận thủ công mỗi tuần; số liệu hiện ở trang Nguồn tăng trưởng và Bản tin điều hành.</p>' +
       (hl.length ? '<div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Ngày</th><th>Điểm</th><th>Gửi hàng muộn</th><th>Hài lòng chat</th><th>Vi phạm</th><th>Đóng băng</th><th>Ghi chú</th><th></th></tr></thead><tbody>' + hl.map(function (x) { return '<tr><td>' + M.fmtDate(x.date) + '</td><td>' + M.fmtNum(x.score) + '</td><td>' + M.fmtPct(x.late, 2) + '</td><td>' + M.fmtPct(x.chat, 2) + '</td><td>' + M.fmtNum(x.violations) + '</td><td>' + M.fmtNum(x.frozen) + '</td><td>' + esc(x.note || '') + '</td><td><button class="link" data-act="delHealth" data-id="' + esc(x.id) + '">Xóa</button></td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div>';
     var mg = D.settings.mgmt || {}, me = (mg.entries || []).slice().sort(function (a, b) { return a.from < b.from ? 1 : -1; });
     h += '<h2>Giá vốn và chi phí kênh (cho Bản tin điều hành)</h2><div class="card form">' +
@@ -656,7 +658,7 @@
     h += '<h2>Bảng ánh xạ cột nguồn → chỉ tiêu</h2><p class="note">So khớp tên cột không phân biệt dấu, hoa/thường, bỏ phần trong ngoặc. Cột thông tin cá nhân không bao giờ được lưu.</p>' + SC.all.map(function (d) {
       return '<details class="card"><summary><strong>' + esc(d.label) + '</strong></summary><p class="small">' + esc(d.desc) + '<br><span class="muted">Nguồn: ' + esc(d.source) + '</span></p><div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Chỉ tiêu</th><th>Kiểu</th><th>Bắt buộc</th><th>Tên cột nguồn được nhận</th><th>Ghi chú</th></tr></thead><tbody>' +
         d.fields.filter(function (f) { return f.key.indexOf('_pii') !== 0; }).map(function (f) { return '<tr><td>' + esc(f.label) + '</td><td>' + esc(f.type) + '</td><td>' + (f.required ? 'Có' : '') + '</td><td>' + esc(f.syn.join(' · ')) + '</td><td>' + (f.pii ? '<span class="pii">Không lưu</span>' : '') + (f.negate ? 'Số âm = chi phí → đổi dấu. ' : '') + (f.nonAdd ? 'Không cộng qua nhiều ngày. ' : '') + esc(f.missing ? 'Nếu thiếu: ' + f.missing : '') + '</td></tr>'; }).join('') + '</tbody></table></div></details>';
-    }).join('') + '<p class="small muted"><a href="kiem_thu.html" target="_blank">Trang kiểm thử công thức</a> · <a href="huong_dan.html" target="_blank">Hướng dẫn sử dụng</a> · <a href="huong_dan_xuat_du_lieu.html" target="_blank">Quy trình tải dữ liệu TikTok</a></p>';
+    }).join('') + '<p class="small muted"><a href="kiem_thu.html" target="_blank">Trang kiểm thử công thức</a> · <a href="huong_dan.html" target="_blank">Hướng dẫn sử dụng</a> · <a href="huong_dan_xuat_du_lieu.html" target="_blank">Quy trình tải dữ liệu TikTok</a> · <a href="huong_dan_doc_bao_cao.html" target="_blank">Cách đọc báo cáo (chủ đầu tư)</a></p>';
     main.innerHTML = h;
     $('#restoreFile').addEventListener('change', function () {
       var f = this.files[0]; this.value = ''; if (!f) return;

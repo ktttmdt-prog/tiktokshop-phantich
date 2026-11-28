@@ -68,7 +68,11 @@
     }
     recs.forEach(function (p) {
       var ex = table.get(p.k); p.conflicts = null;
-      if (ex && ex.active) { p.cls = sameRec(ex, p) ? 'dup' : 'update'; return; }
+      if (ex && ex.active) {
+        // file thiếu cột (vd TikTok rút gọn cột khi xuất kỳ dài): giữ số cũ của các cột không có trong file, không ghi đè thành trống
+        if (p.mapped) { p.keptOld = 0; Object.keys(ex.v).forEach(function (k) { if (!p.mapped[k] && !(k in p.v) && ex.v[k] != null) { p.v[k] = ex.v[k]; p.keptOld++; } }); }
+        p.cls = sameRec(ex, p) ? 'dup' : 'update'; return;
+      }
       p.cls = 'new';
       if (!groups || !p.from) return;
       (groups[p.shop + '|' + p.scope] || []).forEach(function (r) {
@@ -242,7 +246,7 @@
       if (dayLevel && !v[ds.dateField] && !rowErr.length) rowErr.push('thiếu “' + ds.F[ds.dateField].label + '”');
       if (rowErr.length) { nErr++; if (errors.length < 200) errors.push({ row: rowNo, msg: rowErr.join('; ') }); continue; }
       if (ctypeFromName && !v.campaign_type) v.campaign_type = ctypeFromName;
-      var p = { row: rowNo, v: v, scope: scope };
+      var p = { row: rowNo, v: v, scope: scope, mapped: mapped };
       if (shopCol && v.shop_name) { var sid = D.findShop(v.shop_name); if (!sid) { sid = 'NEW:' + v.shop_name.trim(); } p.shop = sid; } else p.shop = shopId;
       if (p.shop.indexOf('NEW:') === 0 && newShops.indexOf(p.shop.slice(4)) < 0) newShops.push(p.shop.slice(4));
       if (dayLevel) {
@@ -280,6 +284,8 @@
     if (recs.some(function (p) { return p.partial; })) warns.push('Có dữ liệu của ngày hôm nay hoặc kỳ chưa kết thúc → gắn nhãn “Ngày chưa kết thúc”.');
 
     I.classify(ds, recs);
+    var keptN = recs.filter(function (p) { return p.keptOld; }).length;
+    if (keptN) warns.push(keptN + ' dòng đã có trong dữ liệu nhưng file này thiếu một số cột: giữ nguyên số cũ của các cột không có trong file.');
     var cnt = function (c) { return recs.filter(function (p) { return p.cls === c; }).length; };
     var same = D.imports.filter(function (i) { return i.hash === up.hash && !i.rolledBack; });
     if (same.length) warns.push('File này (cùng nội dung) đã được nhập ở lần #' + same.map(function (i) { return i.id; }).join(', #') + '. Dòng giống hệt sẽ được bỏ qua, không cộng trùng.');
