@@ -22,6 +22,16 @@ ol.steps>li{margin:7px 0}ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size
 <h1>Quy trình tải dữ liệu TikTok và nhập vào ứng dụng</h1>
 <p class="muted">Dành cho kế toán và nhân sự tải dữ liệu. In được (Ctrl + P). <a href="./">← Ứng dụng</a> · <a href="huong_dan.html">Hướng dẫn sử dụng chung</a></p>
 
+<h2>0. Phần báo cáo nào cần file nào</h2>
+<div class="tw"><table>
+<tr><th>Tab trong ứng dụng</th><th>File cần có</th><th>Mục hướng dẫn</th></tr>
+<tr><td>Tổng quan, Hiệu quả shop</td><td>Shop Analytics_Key metrics (Phân tích shop)</td><td>5F</td></tr>
+<tr><td>Cây chỉ số</td><td>Shop Analytics; Video performance; danh sách video; danh sách LIVE; Liên kết; tình trạng tài khoản</td><td>5F, 5D, 5E</td></tr>
+<tr><td>ROAS &amp; chiến dịch, Kiểm soát ads</td><td>Báo cáo GMV Max theo ngày; báo cáo tùy chỉnh Ads Manager; Cost; Transaction; danh sách booking</td><td>5G, 3, 4</td></tr>
+<tr><td>Kiểm soát kế toán</td><td>Đơn hàng; Quyết toán (income); chi tiết hóa đơn; Cost; Transaction</td><td>5A, 5B, 5C, 3, 4</td></tr>
+<tr><td>Video &amp; Liên kết</td><td>Video performance; Liên kết – chỉ số cốt lõi; danh sách booking</td><td>5F</td></tr>
+</table></div>
+
 <h2>1. Lịch làm việc</h2>
 <div class="tw"><table>
 <tr><th>Khi nào</th><th>Tải gì</th><th>Khoảng ngày chọn trên TikTok</th><th>Kỳ nhập vào ứng dụng</th></tr>
@@ -113,8 +123,25 @@ ol.steps>li{margin:7px 0}ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size
 <h2>5E. Tình trạng tài khoản shop (ghi tay mỗi tuần)</h2>
 <p>Seller Center → <b>Tình trạng tài khoản</b> → <b>Điểm tình trạng tài khoản</b>: ghi điểm, tỷ lệ gửi hàng muộn, tỷ lệ hài lòng qua chat (mục Tổng quan), số vi phạm mới và sản phẩm bị đóng băng (mục Hồ sơ vi phạm). Nhập ở ứng dụng → <b>Chia sẻ, sao lưu &amp; cài đặt</b> → <b>Tình trạng tài khoản shop</b>. TikTok chưa cho xuất file mục này.</p>
 
+<h2>5F. Phân tích shop, Video, Liên kết (số liệu kinh doanh hằng ngày)</h2>
+<ol class="steps">
+<li><b>Phân tích shop:</b> Seller Center → <b>Số liệu phân tích</b> → <b>Phân tích cửa hàng</b> → mục <b>Số liệu chính</b> → chọn ngày (Tháng / Tùy chỉnh) → <b class="btn">Xuất</b>. File <code>Shop Analytics_Key metrics_….xlsx</code> gồm GMV, đơn, khách, lượt hiển thị, lượt nhấp và GMV theo 5 kênh của từng ngày. Mở dòng 1 của file kiểm tra “Ngày phân tích” đúng tháng cần (tên file chỉ ghi ngày xuất).</li>
+<li><b>Video (tổng hợp theo ngày):</b> Số liệu phân tích → <b>Phân tích LIVE &amp; video</b> → <b>Video</b> → <b>Hiệu suất</b> → chọn ngày → <b class="btn">Xuất</b> (<code>Video performance Key metrics_….xlsx</code>). Khi nhập ghi Phạm vi “Tất cả kênh” (hoặc tên nhóm kênh nếu lọc riêng).</li>
+<li><b>Liên kết:</b> Số liệu phân tích → <b>Liên kết</b> → <b>Hiệu suất</b> → mục Số liệu chính → chọn <b>trọn tháng</b> → <b class="btn">Xuất</b> (<code>Transaction_Analysis_Core_Metrics_&lt;từ&gt;-&lt;đến&gt;.xlsx</code>). Chỉ xuất khi tháng đã hết: file của tháng đang chạy bị TikTok chuyển nhiều cột sang “trung bình mỗi ngày”, không so được với tháng trước. Dữ liệu liên kết chỉ giữ khoảng 9 tháng.</li>
+<li><b>Thứ hạng thị trường:</b> ở trang Phân tích cửa hàng (Bảng xếp hạng GMV) và Tăng trưởng &amp; thông tin chuyên sâu (chỉ số ACE) – ghi tay ở <b>Chia sẻ, sao lưu &amp; cài đặt</b> → Ghi nhận số liệu thị trường.</li>
+</ol>
+
+<h2>5G. Báo cáo quảng cáo theo chiến dịch (ROAS)</h2>
+<ol class="steps">
+<li><b>GMV Max:</b> Seller Center → <b>Marketing</b> → <b>Quảng cáo cửa hàng</b> → <b>Danh sách chiến dịch</b> → chọn ngày → <b class="btn">Xuất</b> → chọn <b>Theo ngày</b>. Tải 2 file <code>Product campaign data &lt;từ&gt; - &lt;đến&gt;.xlsx</code> và <code>Live campaign data …</code>. Màn hình này chỉ hiện chiến dịch của <b>tài khoản đang được ủy quyền GMV Max</b>; ghi tên tài khoản đó ở Chia sẻ, sao lưu &amp; cài đặt → Kiểm soát ads.</li>
+<li><b>Chiến dịch thường (không phải GMV Max):</b> <a href="https://ads.tiktok.com/" target="_blank" rel="noopener">ads.tiktok.com</a> → <b>Báo cáo</b> → <b>Báo cáo tùy chỉnh</b> → chọn tất cả tài khoản quảng cáo, chiều “Ngày” và “Chiến dịch”, các cột Chi phí, Doanh thu gộp, Số đơn → chọn ngày → Xuất.</li>
+<li><b>Booking KOL/KOC</b> (không có trên TikTok): bộ phận Marketing điền file mẫu <code>LIÊN KẾT\MAU_Booking_KOL_KOC.csv</code> (Ngày LIVE, Kênh TikTok, Hình thức, Phí booking, GMV ghi nhận, Đơn hàng, Ghi chú) – chỉ ghi tên kênh TikTok, không ghi họ tên, số CCCD, tài khoản ngân hàng.</li>
+</ol>
+<div class="box">Chi phí quảng cáo đầy đủ của mọi tài khoản lấy từ file <b>Cost</b> (mục 3). Phần chi phí không có báo cáo chiến dịch đi kèm được ứng dụng ghi “chưa có báo cáo” ở tab Kiểm soát ads.</div>
+
 <h2>6. Nhập vào ứng dụng</h2>
-<p>Mở ứng dụng (lối tắt <b>Phân tích TikTok Shop</b> trên màn hình nền) → tab <b>Nhập dữ liệu</b> → ô <b>Shop</b> chọn đúng shop.</p>
+<div class="ok"><b>Cách nhanh nhất:</b> khi Chrome hỏi nơi lưu, chọn <b>thư mục dữ liệu</b> đã cài trong ứng dụng (vd <code>37. TIKTOKDU LIEU TIKTOK</code>). Ứng dụng tự đọc và ghi nhận file mới đủ thông tin; chỉ file Cost, chi tiết hóa đơn (không ghi kỳ) hoặc file có chồng lấn/lỗi mới hiện thẻ chờ xem ở tab Nhập dữ liệu – khi đó làm theo các bước 6.1–6.x dưới đây cho thẻ đó. Cách cài: <a href="huong_dan.html#thu-muc">Hướng dẫn sử dụng, mục 1B</a>.</div>
+<p>Nhập thủ công: mở ứng dụng (biểu tượng <b>TikTok Shop</b> hoặc lối tắt <b>Phân tích TikTok Shop</b>) → tab <b>Nhập dữ liệu</b> → ô <b>Shop</b> chọn đúng shop.</p>
 <h3>6.1. File Cost</h3>
 <ol class="steps">
 <li>Điền <b>Kỳ dữ liệu – từ / đến</b> đúng khoảng ngày đã chọn trên TikTok (ví dụ 01/11/2026 → ngày tải; chốt tháng thì 01 → ngày cuối tháng).</li>
@@ -160,6 +187,26 @@ ol.steps>li{margin:7px 0}ol li,ul li{margin:3px 0}.muted{color:#52514e;font-size
 <tr><td>Mục C (quyết toán) vẫn báo chưa có dữ liệu dù đã nhập</td><td>Kỳ lọc không bao trọn kỳ của file (ví dụ lọc 01–20/11 nhưng file 01–25/11)</td><td>Chọn kỳ lọc cả tháng hoặc đúng kỳ của file</td></tr>
 <tr><td>Thẻ đơn hàng đứng ở “Đang đọc file…” lâu</td><td>File đơn hàng lớn (trên 100 nghìn dòng)</td><td>Chờ 10–30 giây; không bấm chọn lại file. Máy yếu thì xuất theo nửa tháng</td></tr>
 <tr><td>Dòng “Lịch sử xuất” của TikTok không còn nút Tải xuống</td><td>Quá 24 giờ kể từ lúc xuất</td><td>Xuất lại</td></tr>
+<tr><td>File đơn hàng tháng thiếu ngày 1</td><td>Bộ lọc “Thời gian đã tạo” tự chọn bị lệch, bắt đầu từ cuối ngày đầu tiên</td><td>Sau khi nhập, xem dòng Nguồn ở mục B: kỳ phải bắt đầu ngày 1. Thiếu thì xuất riêng ngày 1 (chọn ngày cuối tháng trước → ngày 1) và nhập thêm</td></tr>
+<tr><td>Chrome chặn tải nhiều file liên tiếp</td><td>Quyền “tải xuống tự động” của trang</td><td>Bấm biểu tượng tải xuống bị gạch ở thanh địa chỉ → Luôn cho phép trang này</td></tr>
+<tr><td>Cổng thuế báo “Tài khoản đang được sử dụng trên một tab khác”</td><td>Cổng chỉ cho mở 1 tab mỗi tài khoản</td><td>Đóng các tab cổng thuế khác, giữ một tab</td></tr>
 </table></div>
+
+<h2>9. Danh sách việc chốt tháng (ngày 1–5 tháng sau)</h2>
+<ul class="check">
+<li>Business Center (mỗi BC): Cost tháng trước, Transaction → nhập, đối chiếu số Tổng</li>
+<li>Phân tích shop tháng trước; Video performance tháng trước → nhập</li>
+<li>Danh sách video, danh sách LIVE tháng trước (tab Tài khoản kết nối) → nhập</li>
+<li>Liên kết – chỉ số cốt lõi trọn tháng → nhập</li>
+<li>GMV Max theo ngày (Product + LIVE); báo cáo tùy chỉnh Ads Manager → nhập</li>
+<li>Đơn hàng tháng trước (kiểm tra có đủ ngày 1) → nhập; ngày 15 tải lại để cập nhật hoàn/trả</li>
+<li>Quyết toán (income) tháng trước → nhập, 3 phép kiểm tra Khớp</li>
+<li>Chi tiết hóa đơn phí sàn tháng trước (Giấy tờ thuế) → nhập, đối chiếu với phí quyết toán</li>
+<li>Danh sách booking từ Marketing → nhập</li>
+<li>Tình trạng tài khoản (điểm, gửi hàng muộn, hài lòng chat, vi phạm) → ghi ở Cài đặt</li>
+<li>Thuế nhà thầu: lọc hóa đơn có Tax Amount = 0 → lập tờ khai 01/NTNN, NCCNN bằng mã nộp thay, hạn ngày 20</li>
+<li>Tải bản sao lưu (.ttsbak), chép sang ổ khác</li>
+<li>Gửi báo cáo lãnh đạo (file mã hóa + mật khẩu gửi riêng)</li>
+</ul>
 </body>
 </html>

@@ -2,12 +2,12 @@
 (function (root) {
   'use strict';
   var M = root.TTSM, V = root.TTSV, esc = V.esc, W = {};
-  var TABS = [['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['content', 'Video & Liên kết']];
+  var TABS = [['brief', 'Bản tin điều hành'], ['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['content', 'Video & Liên kết']];
 
   /* host: phần tử chứa; data: {meta, cube, f, remaining, rankIndex} */
   W.mount = function (host, data) {
     var cube = M.prepare(data.cube), LIM = { from: data.f.from, to: data.f.to };
-    var S = { f: { from: data.f.from, to: data.f.to, shop: data.f.shop || '', ent: data.f.ent || '' }, tab: 'overview', remaining: data.remaining || 0, rankIndex: data.rankIndex || 0 };
+    var S = { f: { from: data.f.from, to: data.f.to, shop: data.f.shop || '', ent: data.f.ent || '' }, tab: 'brief', remaining: data.remaining || 0, rankIndex: data.rankIndex || 0 };
     host.innerHTML = '<div class="banner ok">' + esc(data.meta.title) + ' · lập ngày ' + esc(data.meta.createdAt) + (data.meta.by ? ' · ' + esc(data.meta.by) : '') + '</div><nav class="tabs v-tabs" role="tablist"></nav><div class="filters v-filters"></div><div class="v-main"></div>';
     var tabsEl = host.querySelector('.v-tabs'), filEl = host.querySelector('.v-filters'), mainEl = host.querySelector('.v-main');
     function render() {
@@ -20,7 +20,7 @@
         '<label>Chiến dịch <select data-vf="ent"' + (ck.length ? '' : ' disabled') + '><option value="">' + (ck.length ? 'Tất cả chiến dịch' : 'Không có dữ liệu chiến dịch') + '</option>' + ck.map(function (k) { return '<option value="' + esc(k) + '"' + (f.ent === k ? ' selected' : '') + '>' + esc(camps[k]) + '</option>'; }).join('') + '</select></label>' +
         '<span class="hint">Kỳ dữ liệu trong báo cáo: ' + M.fmtPeriod(LIM.from, LIM.to) + '</span>';
       var ctx = V.compute(cube, S.f, { remaining: S.remaining, rankIndex: S.rankIndex });
-      if (S.tab === 'overview') V.overview(mainEl, ctx); else if (S.tab === 'shop') V.shop(mainEl, ctx); else if (S.tab === 'roas') V.roas(mainEl, ctx); else if (S.tab === 'adsctl') V.adsControl(mainEl, ctx); else if (S.tab === 'growth') V.growth(mainEl, ctx); else if (S.tab === 'acc') V.accounting(mainEl, ctx); else V.content(mainEl, ctx);
+      if (S.tab === 'brief') V.brief(mainEl, ctx); else if (S.tab === 'overview') V.overview(mainEl, ctx); else if (S.tab === 'shop') V.shop(mainEl, ctx); else if (S.tab === 'roas') V.roas(mainEl, ctx); else if (S.tab === 'adsctl') V.adsControl(mainEl, ctx); else if (S.tab === 'growth') V.growth(mainEl, ctx); else if (S.tab === 'acc') V.accounting(mainEl, ctx); else V.content(mainEl, ctx);
     }
     host.addEventListener('click', function (ev) { var b = ev.target.closest('[data-vtab]'); if (b) { S.tab = b.getAttribute('data-vtab'); render(); } });
     host.addEventListener('change', function (ev) {

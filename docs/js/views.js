@@ -798,5 +798,265 @@
     if (amt && unit) { amt.addEventListener('input', calc); unit.addEventListener('change', calc); calc(); }
   };
 
+  // ---------- BẢN TIN ĐIỀU HÀNH (chủ đầu tư): tiền đi đâu, vì sao tăng/giảm, cần quyết gì ----------
+  /* Màu theo khoản (cố định trong mọi biểu đồ của bản tin): còn lại = xanh; hoàn tiền = cam; phí sàn & khuyến mãi = xanh ngọc;
+     hoa hồng nhà sáng tạo = vàng; quảng cáo & booking = hồng; giá vốn = xanh lá; dòng tổng = xám. Thứ tự khối đúng thứ tự bảng màu đã kiểm tra mù màu. */
+  var BR = { remain: 1, refund: 2, platform: 3, creator: 4, ads: 5, cogs: 6 };
+  var BR_INK = { remain: '#fff', refund: '#fff', platform: '#fff', creator: '#0b0b0b', ads: '#fff', cogs: '#fff' };
+  function brCol(k) { return k === 'total' ? 'var(--neutral-mark)' : 'var(--series-' + BR[k] + ')'; }
+  function pts(a, b) { return a == null || b == null ? null : (b - a) * 100; }
+  function brTrend(a, b) { var c = chg(a, b); return c == null ? '' : (c >= 0 ? 'tăng ' : 'giảm ') + num(Math.abs(c) * 100, 1) + '%'; }
+  function brDelta(x, upGood, kind) { // kind: pct = % thay đổi; pts = điểm %; d100 = đồng trên 100 đồng
+    if (x == null || !isFinite(x)) return '';
+    var mag = kind === 'pct' ? Math.abs(x) * 100 : Math.abs(x), flat = mag < 0.05;
+    var lab = (x >= 0 ? '+' : '−') + num(mag, 1) + (kind === 'pct' ? '%' : kind === 'pts' ? ' điểm' : ' đồng');
+    return badge({ cls: flat ? 'na' : (x > 0) === upGood ? 'good' : 'bad', icon: flat ? '=' : x > 0 ? '▲' : '▼', label: flat ? 'Không đổi' : lab });
+  }
+  function brTile(label, value, delta, sub) {
+    return '<div class="tile br-tile"><div class="tile-label">' + esc(label) + '</div><div class="tile-value">' + value + '</div>' +
+      (delta ? '<div class="br-delta">' + delta + ' <span class="muted small">so với kỳ trước</span></div>' : '') + (sub ? '<div class="tile-sub">' + sub + '</div>' : '') + '</div>';
+  }
+  function brSec(title, lead) { return '<section class="br-sec"><h3>' + esc(title) + '</h3>' + (lead ? '<p class="br-lead">' + lead + '</p>' : ''); }
+  function shortCov(c) { return c ? M.fmtDayMonth(c.from) + '–' + M.fmtDayMonth(c.to) : ''; }
+  function p100(x) { return x == null || !isFinite(x) ? '—' : (x < 0 ? '−' : '') + num(Math.abs(x), 1); }
+  function sgnMoney(x) { return x == null ? '—' : (x < 0 ? '−' : '') + money(Math.abs(x)); }
+  function pctOrDash(x, d) { return x == null || !isFinite(x) ? '—' : M.fmtPct(x, d == null ? 1 : d); }
+
+  /* Các dòng của báo cáo kết quả (dùng chung cho bảng, thác nước và thanh 100 đồng) */
+  function brRows(pl) {
+    if (!pl) return [];
+    var r = [];
+    if (pl.gross) { r.push({ id: 'gross', label: 'Tiền hàng khách đặt', note: 'đơn đã quyết toán, sau giảm giá của shop', val: pl.gross, kind: 'total' });
+      r.push({ id: 'refund', label: 'Hoàn tiền cho khách', val: pl.refund, kind: 'step', col: 'refund' }); }
+    r.push({ id: 'net', label: 'Doanh thu thuần', note: 'tiền hàng sau hoàn tiền', val: pl.net, kind: 'total' });
+    r.push({ id: 'platform', label: 'Phí sàn TikTok', note: 'hoa hồng sàn, phí giao dịch, xử lý đơn, SFR, vận chuyển', val: pl.platform, kind: 'step', col: 'platform' });
+    if (pl.promo) r.push({ id: 'promo', label: 'Phí chương trình khuyến mãi', note: 'Voucher Xtra, Flash Sale, ưu đãi LIVE…', val: pl.promo, kind: 'step', col: 'platform' });
+    if (pl.otherFees) r.push({ id: 'otherFees', label: 'Phí khác của sàn', note: 'dòng phí chưa phân nhóm', val: pl.otherFees, kind: 'step', col: 'platform' });
+    if (pl.adj) r.push({ id: 'adj', label: 'Bồi thường, điều chỉnh của sàn', val: pl.adj, kind: 'step', col: 'platform' });
+    r.push({ id: 'creator', label: 'Hoa hồng nhà sáng tạo', note: 'KOL/KOC bán hộ qua liên kết', val: pl.creator, kind: 'step', col: 'creator' });
+    if (pl.adsStl) r.push({ id: 'adsStl', label: 'Quảng cáo trừ thẳng vào tiền hàng', val: pl.adsStl, kind: 'step', col: 'ads' });
+    r.push({ id: 'afterPlatform', label: 'Doanh thu sau phí sàn', val: pl.afterPlatform, kind: 'total' });
+    r.push({ id: 'adCost', label: 'Quảng cáo TikTok', note: pl.adSrc === 'acct' ? 'tài khoản quảng cáo, gồm thuế nhà cung cấp tự thu' : pl.adSrc === 'campaign' ? 'tạm theo báo cáo chiến dịch, chưa gồm thuế' : 'chưa có dữ liệu', val: pl.adCost, kind: 'step', col: 'ads' });
+    if (pl.bookingN) r.push({ id: 'booking', label: 'Booking nhà sáng tạo', note: 'danh sách nội bộ, ' + num(pl.bookingN) + ' lần', val: pl.booking, kind: 'step', col: 'ads' });
+    r.push({ id: 'beforeCogs', label: 'Còn lại trước giá vốn', val: pl.beforeCogs, kind: 'total' });
+    r.push({ id: 'cogs', label: 'Giá vốn hàng bán', note: pl.cogsMethod === 'actual' ? 'theo sổ kế toán' : pl.cogsMethod === 'rate' ? 'ước tính ' + M.fmtPct(pl.cogsRate, 1) + ' doanh thu thuần' : 'kế toán chưa nhập', val: pl.cogs, kind: 'step', col: 'cogs' });
+    r.push({ id: 'contribution', label: 'Lãi đóng góp kênh TikTok', note: 'phần còn lại để trả chi phí chung và tạo lợi nhuận', val: pl.contribution, kind: 'result' });
+    if (pl.opex != null) {
+      r.push({ id: 'opex', label: 'Chi phí vận hành kênh', note: 'nhân sự, studio… theo sổ kế toán', val: pl.opex, kind: 'step', col: 'cogs' });
+      r.push({ id: 'afterOpex', label: 'Lãi kênh sau chi phí trực tiếp', val: pl.afterOpex, kind: 'result' });
+    }
+    return r;
+  }
+  function brTable(pl, pv) {
+    var rows = brRows(pl), pvRows = {}, max = 0, run = 0, broken = false;
+    brRows(pv).forEach(function (x) { pvRows[x.id] = x.val; });
+    rows.forEach(function (x) { if (x.val != null && Math.abs(x.val) > max) max = Math.abs(x.val); });
+    var out = rows.map(function (x) {
+      var bar = '';
+      if (x.val == null) broken = true;
+      if (!broken && max > 0) {
+        var a, b, col;
+        if (x.kind === 'step') { a = run; b = run + x.val; run = b; col = brCol(x.col); } else { a = 0; b = x.val; run = x.val; col = x.kind === 'result' ? brCol('remain') : brCol('total'); }
+        var lo = Math.max(0, Math.min(a, b)), hi = Math.max(0, Math.max(a, b));
+        bar = '<div class="wf-track" aria-hidden="true"><div class="wf-bar" style="left:' + (lo / max * 100).toFixed(2) + '%;width:' + Math.max(0.4, (hi - lo) / max * 100).toFixed(2) + '%;background:' + col + '"></div></div>';
+      }
+      var cur = M.per100(pl, x.val), prev = pv ? M.per100(pv, pvRows[x.id]) : null;
+      var sign = x.kind === 'step' ? (x.val != null && x.val > 0 ? '+ ' : '− ') : x.kind === 'result' || x.id === 'net' || x.id === 'afterPlatform' || x.id === 'beforeCogs' ? '= ' : '';
+      var label = '<span class="br-sign">' + sign + '</span>' + (x.kind === 'step' ? '<span class="sw-inline" style="background:' + brCol(x.col) + '"></span>' : '') + esc(x.label) + (x.note ? '<div class="tile-sub">' + esc(x.note) + '</div>' : '');
+      return { cls: x.kind === 'step' ? 'br-step' : x.kind === 'result' ? 'br-result' : 'br-total',
+        cells: [label, x.val == null ? '<span class="muted">' + M.NODATA + '</span>' : sgnMoney(x.val), x.id === 'gross' ? '100' : p100(cur), pv ? (x.id === 'gross' ? '100' : p100(prev)) : '—',
+          x.id === 'gross' || cur == null || prev == null ? '' : brDelta(cur - prev, true, 'd100'), bar] };
+    });
+    var memo = [];
+    if (pl.taxWithheld) memo.push([pl.taxWithheld < 0 ? 'Thuế do sàn khấu trừ thay' : 'Thuế sàn hoàn lại (khoản đã khấu trừ trước đây)', sgnMoney(pl.taxWithheld), 'không phải chi phí kinh doanh; theo dõi để đối chiếu với cơ quan thuế']);
+    memo.push(['Tiền sàn đã trả về tài khoản', money(pl.settlement), '= doanh thu sau phí sàn' + (pl.taxWithheld < 0 ? ' − thuế khấu trừ thay' : pl.taxWithheld > 0 ? ' + thuế sàn hoàn lại' : '') + (pl.cashCheck === 0 ? ' · khớp' : ' · lệch ' + money(pl.cashCheck))]);
+    return tbl(['Chỉ tiêu', { t: 'Số tiền (đ)', num: true }, { t: 'Trên 100 đồng', num: true }, { t: 'Kỳ trước', num: true }, { t: 'Thay đổi', num: true }, 'Minh họa'], out, { cls: 'br-pl' }) +
+      '<div class="br-memo">' + memo.map(function (m) { return '<div><span>' + esc(m[0]) + '</span><strong>' + m[1] + '</strong><span class="muted small">' + esc(m[2]) + '</span></div>'; }).join('') + '</div>';
+  }
+  function brParts(pl) {
+    var remain = pl.contribution != null ? pl.contribution : pl.beforeCogs != null ? pl.beforeCogs : pl.afterPlatform;
+    var parts = [{ k: 'remain', label: pl.contribution != null ? 'Còn lại (lãi đóng góp)' : pl.beforeCogs != null ? 'Còn lại, chưa trừ giá vốn' : 'Còn lại sau phí sàn', value: remain }];
+    if (pl.gross) parts.push({ k: 'refund', label: 'Hoàn tiền cho khách', value: -pl.refund });
+    parts.push({ k: 'platform', label: 'Phí sàn và khuyến mãi', value: -(pl.platform + pl.promo + pl.otherFees + pl.adj) });
+    parts.push({ k: 'creator', label: 'Hoa hồng nhà sáng tạo', value: -pl.creator });
+    if (pl.adCost != null || pl.adsStl) parts.push({ k: 'ads', label: 'Quảng cáo và booking', value: -((pl.adCost || 0) + pl.adsStl + pl.booking) });
+    if (pl.cogs != null && pl.contribution != null) parts.push({ k: 'cogs', label: 'Giá vốn hàng bán' + (pl.cogsMethod === 'rate' ? ' (ước tính)' : ''), value: -pl.cogs });
+    return { remain: remain, parts: parts };
+  }
+
+  V.brief = function (host, ctx) {
+    var b = M.brief(ctx), pl = b.pl, pv = b.plPrev, gr = b.gr, c = gr.cur, p = gr.prev, f = ctx.f, sp = ctx.shop;
+    var h = '<div class="brief">';
+    // 0. Đầu bản tin + độ phủ số liệu
+    var chip = function (label, val, ok) { return '<span class="chip' + (ok ? '' : ' miss') + '">' + esc(label) + ': <b>' + val + '</b></span>'; };
+    h += '<header class="brief-head"><div><div class="eyebrow">Bản tin điều hành · kênh TikTok Shop</div><h2>Kỳ ' + M.fmtPeriod(f.from, f.to) + '</h2><div class="small muted">' + esc(ctx.shopLabel) + ' · so với kỳ trước ' + M.fmtPeriod(b.prevFrom, b.prevTo) + '</div></div>' +
+      '<div class="chips" aria-label="Độ phủ số liệu">' + chip('Doanh số', sp.n ? shortCov(sp.coverage) : 'chưa có', sp.n) + chip('Quyết toán', pl ? shortCov(pl.coverage) : 'chưa có', !!pl) +
+      chip('Quảng cáo', pl && pl.adCov ? shortCov(pl.adCov) : 'chưa có', !!(pl && pl.adSrc === 'acct')) +
+      chip('Giá vốn', !pl ? '—' : pl.cogsMethod === 'actual' ? 'theo sổ' : pl.cogsMethod === 'rate' ? 'ước tính' : 'chưa nhập', !!(pl && pl.cogsMethod === 'actual')) +
+      chip('Tình trạng shop', b.health ? M.fmtDayMonth(b.health.date) : 'chưa có', !!b.health) + '</div></header>';
+    if (b.warn.length) h += '<div class="br-warn">' + b.warn.map(function (w) { return '<div><span aria-hidden="true">!</span> ' + esc(w) + '</div>'; }).join('') + '</div>';
+
+    // 1. Tóm tắt 3 dòng
+    var sm = [];
+    if (gr.hasCur) sm.push('Doanh số đặt hàng bình quân <b>' + sMoney(c.gmvD) + '/ngày</b>' + (gr.hasPrev ? ', ' + brTrend(p.gmvD, c.gmvD) + ' so với kỳ trước (' + sMoney(p.gmvD) + '/ngày).' : '.'));
+    var bp = pl ? brParts(pl) : null;
+    if (pl && bp.remain != null) {
+      var same = pv && (pl.contribution != null ? pv.contribution : pl.beforeCogs != null ? pv.beforeCogs : pv.afterPlatform);
+      sm.push('Trên 100 đồng tiền hàng khách đặt, công ty còn lại <b>' + p100(M.per100(pl, bp.remain)) + ' đồng</b> ' +
+        (pl.contribution != null ? 'sau hoàn tiền, phí sàn, quảng cáo và giá vốn' + (pl.cogsMethod === 'rate' ? ' (giá vốn ước tính)' : '') : pl.beforeCogs != null ? 'sau hoàn tiền, phí sàn và quảng cáo, chưa trừ giá vốn' : 'sau hoàn tiền và phí sàn') +
+        (same != null ? ' (kỳ trước ' + p100(M.per100(pv, same)) + ' đồng)' : '') + '.');
+    }
+    if (gr.funnel && gr.hasPrev) {
+      var big = gr.funnel.slice().sort(function (x, y) { return Math.abs(y.impact) - Math.abs(x.impact); })[0];
+      sm.push('Yếu tố tác động lớn nhất tới doanh số: <b>' + esc(M.BRIEF_FACTOR[big.key].toLowerCase()) + '</b> ' + brTrend(big.a, big.b) + ', tương đương ' + signMoney(big.impact) + '/ngày.');
+    }
+    if (sm.length) h += '<ul class="br-summary">' + sm.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>';
+
+    // 2. 100 đồng đi đâu
+    if (pl) {
+      var rem100 = M.per100(pl, bp.remain), prevRem = pv ? M.per100(pv, pl.contribution != null ? pv.contribution : pl.beforeCogs != null ? pv.beforeCogs : pv.afterPlatform) : null;
+      h += '<section class="story"><div class="story-lead">Khách đặt <b>100 đồng</b> tiền hàng, công ty còn lại</div><div class="story-hero">' + p100(rem100) + ' <small>đồng</small></div>' +
+        '<div class="story-sub">' + esc(bp.parts[0].label.toLowerCase()) + (prevRem != null ? ' · kỳ trước ' + p100(prevRem) + ' đồng ' + brDelta(rem100 - prevRem, true, 'd100') : '') + '</div>' +
+        (bp.remain >= 0 ? '<div data-chart="br-seg"></div>' : '<p class="note">Các khoản chi lớn hơn tiền hàng: phần còn lại âm, không vẽ được dạng chia phần. Xem bảng kết quả bên dưới.</p>') +
+        '<p class="small muted">Cơ sở: tiền hàng của các đơn TikTok đã quyết toán từ ' + M.fmtPeriod(pl.coverage.from, pl.coverage.to) + ' (' + money(pl.base) + '). Rê chuột hoặc chạm vào từng khối để xem số tiền.</p></section>';
+    }
+
+    // 3. Chỉ số chính
+    var tiles = [];
+    if (sp.n) tiles.push(brTile('Doanh số đặt hàng (GMV)', sMoney(sp.gmv), gr.hasPrev ? brDelta(chg(p.gmvD, c.gmvD), true, 'pct') : '', 'bình quân ' + sMoney(c.gmvD) + '/ngày · gồm cả đơn sẽ hủy, hoàn'));
+    if (pl) {
+      var nd = function (q) { return q.days ? q.net / q.days : null; };
+      tiles.push(brTile('Doanh thu thuần', sMoney(pl.net), pv ? brDelta(chg(nd(pv), nd(pl)), true, 'pct') : '', 'sau hoàn tiền · ' + sMoney(nd(pl)) + '/ngày quyết toán'));
+      tiles.push(brTile('Tiền sàn đã trả về', sMoney(pl.settlement), pv ? brDelta(pts(pv.keepRate, pl.keepRate), true, 'pts') : '', pctOrDash(pl.keepRate) + ' doanh thu thuần'));
+      tiles.push(brTile('Phí sàn, khuyến mãi, hoa hồng', sMoney(-pl.fees), pv ? brDelta(pts(pv.feeRate, pl.feeRate), false, 'pts') : '', pctOrDash(pl.feeRate) + ' doanh thu thuần'));
+      tiles.push(brTile('Quảng cáo và booking', pl.adCost == null ? M.NODATA : sMoney(-(pl.adCost + pl.booking)), pv && pl.adRate != null ? brDelta(pts(pv.adRate, pl.adRate), false, 'pts') : '', pl.adRate == null ? 'cần file Chi phí của Business Center' : pctOrDash(pl.adRate) + ' doanh thu thuần'));
+      tiles.push(brTile('Lãi đóng góp', pl.contribution == null ? (pl.adCost == null ? M.NODATA : 'Chưa có giá vốn') : sgnMoney(pl.contribution), pv && pl.margin != null && pv.margin != null ? brDelta(pts(pv.margin, pl.margin), true, 'pts') : '',
+        pl.contribution == null ? (pl.beforeCogs != null ? 'trước giá vốn còn ' + sMoney(pl.beforeCogs) + ' (' + pctOrDash(pl.marginBefore) + ')' : '') : 'biên ' + pctOrDash(pl.margin) + ' doanh thu thuần' + (pl.cogsMethod === 'rate' ? ' · giá vốn ước tính' : '')));
+    }
+    if (tiles.length) h += brSec('Các con số chính', 'Mũi tên xanh là biến động tốt cho công ty, đỏ là biến động xấu (với chi phí: tăng là xấu).') + '<div class="tiles br-tiles">' + tiles.join('') + '</div></section>';
+
+    // 4. Báo cáo kết quả kinh doanh (kế toán quản trị)
+    if (pl) {
+      h += brSec('Kết quả kinh doanh kênh TikTok', 'Đi từ tiền hàng khách đặt đến lãi đóng góp. Cột “Trên 100 đồng” giúp so sánh giữa các kỳ có độ dài khác nhau; thanh minh họa cho thấy mỗi khoản lấy đi bao nhiêu.') +
+        '<div class="legend"><span><b class="sw" style="background:' + brCol('total') + '"></b>Dòng tổng</span><span><b class="sw" style="background:' + brCol('refund') + '"></b>Hoàn tiền</span><span><b class="sw" style="background:' + brCol('platform') + '"></b>Phí sàn, khuyến mãi</span><span><b class="sw" style="background:' + brCol('creator') + '"></b>Hoa hồng nhà sáng tạo</span><span><b class="sw" style="background:' + brCol('ads') + '"></b>Quảng cáo, booking</span><span><b class="sw" style="background:' + brCol('cogs') + '"></b>Giá vốn, vận hành</span><span><b class="sw" style="background:' + brCol('remain') + '"></b>Lãi</span></div>' +
+        brTable(pl, pv) + src('Doanh thu và phí theo ngày quyết toán (tiền đã về), không theo ngày đặt đơn. Kỳ trước: ' + (pv ? M.fmtPeriod(pv.coverage.from, pv.coverage.to) : 'chưa có báo cáo quyết toán') + '.') + '</section>';
+    } else h += nodata('Chưa có báo cáo quyết toán trong kỳ lọc – nhập file income_….xlsx (Tài chính → Giao dịch → Đã quyết toán → Xuất) để lập kết quả kinh doanh.');
+
+    // 5. Doanh số tăng/giảm vì đâu
+    if (gr.hasCur && gr.hasPrev && gr.funnel) {
+      h += brSec('Doanh số tăng hay giảm vì đâu', 'Doanh số mỗi ngày = lượt hiển thị sản phẩm × tỷ lệ bấm vào × tỷ lệ chốt đơn × giá trị mỗi đơn. Doanh số/ngày thay đổi <b>' + signMoney(gr.gmvDelta) + '</b>; các thanh dưới đây tách phần thay đổi đó theo từng yếu tố (cộng lại đúng bằng tổng).') +
+        '<div data-chart="br-funnel"></div>';
+      if (gr.channels) h += '<h4>Theo kênh bán (doanh số/ngày)</h4><div data-chart="br-ch"></div>';
+      h += src('Nguồn: Phân tích shop, kỳ này ' + cov(sp.coverage) + ', kỳ trước ' + M.fmtPeriod(gr.prevFrom, gr.prevTo) + ' · tách theo phương pháp logarit (LMDI).') + '</section>';
+    } else if (gr.hasCur) h += brSec('Doanh số tăng hay giảm vì đâu') + '<p class="note">Chưa có Phân tích shop của kỳ trước (' + M.fmtPeriod(gr.prevFrom, gr.prevTo) + ') để so sánh.</p></section>';
+
+    // 6. Nội dung và kênh bán
+    if (sp.n) {
+      // danh sách video / LIVE phủ dưới 7 ngày thì chưa đủ để so sánh giữa các kỳ (một ngày lẻ dao động rất mạnh)
+      var vl = c.vl, pvl = p.vl, ll = c.ll, pll = p.ll, ct = [], vOk = vl.nDays >= 7 && pvl.nDays >= 7, lOk = ll.nDays >= 7 && pll.nDays >= 7;
+      var few = function (n) { return 'danh sách mới có ' + num(n) + ' ngày – chưa đủ 7 ngày để so sánh'; };
+      if (vl.n) {
+        ct.push(brTile('Video mới đăng / ngày', num(vl.newPerDay, 1), vOk ? brDelta(chg(pvl.newPerDay, vl.newPerDay), true, 'pct') : '', vl.nDays >= 7 ? num(vl.newVideos) + ' video mới trong ' + num(vl.nDays) + ' ngày' : few(vl.nDays)));
+        ct.push(brTile('Lượt xem trung vị mỗi video mới', num(vl.medianVVNew, 0), vOk ? brDelta(chg(pvl.medianVVNew, vl.medianVVNew), true, 'pct') : '', 'định mức quy chế 20.000 lượt/video'));
+        ct.push(brTile('Doanh số trên 1.000 lượt xem video', money(vl.gpm), vOk ? brDelta(chg(pvl.gpm, vl.gpm), true, 'pct') : '', num(vl.withGmv) + '/' + num(vl.videos) + ' video có doanh số'));
+      }
+      if (ll.n) {
+        ct.push(brTile('Giờ LIVE / ngày', num(ll.hours / ll.nDays, 1), lOk ? brDelta(chg(pll.hours / pll.nDays, ll.hours / ll.nDays), true, 'pct') : '', ll.nDays >= 7 ? num(ll.sessions) + ' phiên · ' + num(ll.nDays) + ' ngày có LIVE' : few(ll.nDays)));
+        ct.push(brTile('Doanh số mỗi giờ LIVE', sMoney(ll.gmvPerHour), lOk ? brDelta(chg(pll.gmvPerHour, ll.gmvPerHour), true, 'pct') : '', num(ll.viewersPerHour, 0) + ' người xem/giờ'));
+      }
+      h += brSec('Nội dung và kênh bán', 'Cơ cấu doanh số theo kênh trong kỳ và năng suất của đội nội dung: mỗi video, mỗi giờ LIVE mang về bao nhiêu.') + '<div data-chart="br-mix"></div>';
+      if (ct.length) h += '<div class="tiles br-tiles">' + ct.join('') + '</div>';
+      else h += '<p class="note">Chưa có danh sách từng video / từng phiên LIVE trong kỳ để tính năng suất nội dung.</p>';
+      var worstF = gr.funnel ? gr.funnel.slice().sort(function (x, y) { return x.impact - y.impact; })[0] : null;
+      if (b.gap && worstF && worstF.key !== 'impr' && worstF.impact < 0) {
+        var imprF = gr.funnel.filter(function (x) { return x.key === 'impr'; })[0];
+        h += '<div class="br-gap"><strong>Doanh số giảm ' + sMoney(b.gap.gmv) + '/ngày chủ yếu do ' + esc(M.BRIEF_FACTOR[worstF.key].toLowerCase()) + ' (' + brTrend(worstF.a, worstF.b) + ')</strong>' +
+          (imprF && imprF.impact > 0 ? ', trong khi lượt hiển thị sản phẩm vẫn ' + brTrend(imprF.a, imprF.b) : '') + '. Tăng thêm video hay giờ LIVE không bù được phần này nếu khách vào xem vẫn không mua; cần xử lý ' +
+          { ctr: 'hình ảnh, tiêu đề, giá hiển thị và đoạn mở đầu nội dung', c2o: 'giá bán, khuyến mãi, đánh giá sản phẩm, hết hàng và tình trạng tài khoản', aov: 'combo, quà tặng và ngưỡng miễn phí vận chuyển' }[worstF.key] + ' trước.</div>';
+      } else if (b.gap && (b.gap.videos || b.gap.hours)) {
+        var nm = b.gap.norm;
+        h += '<div class="br-gap"><strong>Muốn lấy lại ' + sMoney(b.gap.gmv) + ' doanh số/ngày đã giảm</strong>, theo hiệu suất hiện tại cần thêm khoảng ' +
+          (b.gap.videos ? '<b>' + num(b.gap.videos, 0) + ' video mới mỗi ngày</b> (' + num(nm.vvPerVideo, 0) + ' lượt xem/video, ' + money(nm.gmvPerView * 1000) + ' trên 1.000 lượt xem)' : '') + (b.gap.videos && b.gap.hours ? ' hoặc ' : '') +
+          (b.gap.hours ? '<b>' + num(b.gap.hours, 1) + ' giờ LIVE mỗi ngày</b> (' + sMoney(nm.gmvPerHour) + '/giờ)' : '') + '. Đây là quy đổi theo bình quân để định lượng, không phải dự báo.</div>';
+      }
+      h += '</section>';
+    }
+
+    // 7. Chất lượng doanh thu và vận hành
+    var hs = b.health, hp = b.healthPrev, q = [], okB = function (ok) { return ok == null ? '' : ok ? badge({ cls: 'good', icon: '✓', label: 'Đạt' }) : badge({ cls: 'bad', icon: '✗', label: 'Không đạt' }); };
+    var o1 = b.ord, o0 = b.ordPrev;
+    if (pl) q.push(['Hoàn tiền / tiền hàng (quyết toán)', pv ? pctOrDash(pv.refundRate) : '—', pctOrDash(pl.refundRate), '', pv ? brDelta(pts(pv.refundRate, pl.refundRate), false, 'pts') : '']);
+    if (o1.cancelRateCount != null) q.push(['Đơn bị hủy / tổng đơn', o0.cancelRateCount != null ? pctOrDash(o0.cancelRateCount) : '—', pctOrDash(o1.cancelRateCount), '', o0.cancelRateCount != null ? brDelta(pts(o0.cancelRateCount, o1.cancelRateCount), false, 'pts') : '']);
+    if (ctx.ads.n && ctx.ads.roas != null) { var offT = ctx.official != null ? ctx.official : ctx.thresholds[0]; q.push(['ROAS quảng cáo (báo cáo chiến dịch, ' + shortCov(ctx.ads.coverage) + ')', '—', num(ctx.ads.roas, 2), '≥ ' + tf(offT), okB(ctx.ads.roas >= offT)]); }
+    if (hs) {
+      if (hs.late != null) q.push(['Gửi hàng muộn', hp && hp !== hs && hp.late != null ? pctOrDash(hp.late, 2) : '—', pctOrDash(hs.late, 2), '≤ 4%', okB(hs.late <= M.healthTargets.late)]);
+      if (hs.chat != null) q.push(['Hài lòng qua chat', hp && hp !== hs && hp.chat != null ? pctOrDash(hp.chat, 2) : '—', pctOrDash(hs.chat, 2), '≥ 70%', okB(hs.chat >= M.healthTargets.chat)]);
+      if (hs.score != null) q.push(['Điểm tình trạng tài khoản', hp && hp !== hs && hp.score != null ? num(hp.score) : '—', num(hs.score), '', '']);
+      if (hs.violations != null) q.push(['Vi phạm trong tháng', hp && hp !== hs && hp.violations != null ? num(hp.violations) : '—', num(hs.violations), '', '']);
+      if (hs.frozen != null) q.push(['Sản phẩm bị đóng băng', hp && hp !== hs && hp.frozen != null ? num(hp.frozen) : '—', num(hs.frozen), '0', okB(!(hs.frozen > 0))]);
+    }
+    if (q.length) h += brSec('Chất lượng doanh thu và vận hành', 'Các chỉ số làm doanh thu “rò rỉ” sau khi đã bán và các chỉ số TikTok dùng để quyết định có tiếp tục đẩy hiển thị cho shop hay không.') +
+      tbl(['Chỉ số', { t: 'Kỳ trước', num: true }, { t: 'Kỳ này', num: true }, { t: 'Yêu cầu', num: true }, 'Đánh giá'], q) +
+      src((hs ? 'Tình trạng tài khoản ghi nhận ngày ' + M.fmtDate(hs.date) + ' (Seller Center → Tình trạng tài khoản). ' : '') + 'Hủy đơn theo file Đơn hàng; hoàn tiền theo báo cáo quyết toán.') + '</section>';
+
+    // 8. Xu hướng theo tháng
+    if (b.months.length > 1) h += brSec('Xu hướng doanh số theo tháng', 'Doanh số đặt hàng bình quân mỗi ngày (chia cho số ngày có số liệu để so được tháng chưa hết). Cột xanh là tháng trong kỳ đang xem.') +
+      '<div class="chart" data-chart="br-trend"></div><div class="legend"><span><b class="sw" style="background:var(--series-1)"></b>Tháng trong kỳ xem</span><span><b class="sw" style="background:var(--neutral-mark)"></b>Tháng khác</span><span>Cột nhạt: tháng chưa đủ ngày số liệu</span></div></section>';
+
+    // 9. Việc cần quyết định
+    if (b.decisions.length) h += brSec('Việc cần quyết định') + '<ol class="br-dec">' + b.decisions.map(function (d) {
+      var ic = d.k === 'bad' ? '✗' : d.k === 'warn' ? '!' : 'i';
+      return '<li class="cm-' + d.k + '"><span class="cm-ic" aria-hidden="true">' + ic + '</span><span>' + esc(d.t) + '</span></li>';
+    }).join('') + '</ol></section>';
+
+    // 10. Cách đọc và đối chiếu
+    var chk = [];
+    if (pl) {
+      var ok0 = function (x) { return x == null ? '<span class="muted">không kiểm được</span>' : x === 0 ? badge({ cls: 'good', icon: '✓', label: 'Khớp' }) : badge({ cls: 'bad', icon: '✗', label: 'Lệch ' + money(x) }); };
+      chk.push(['Tiền hàng − hoàn tiền = doanh thu thuần', ok0(pl.revDiff)]);
+      chk.push(['Tổng các dòng phí = tổng phí trên báo cáo quyết toán', ok0(pl.feeLinesDiff)]);
+      chk.push(['Doanh thu thuần + phí + điều chỉnh = tiền sàn trả về', ok0(pl.calcDiff)]);
+      chk.push(['Doanh thu sau phí sàn − thuế khấu trừ thay = tiền sàn trả về', ok0(pl.cashCheck)]);
+    }
+    h += '<details class="card br-notes"><summary><strong>Cách đọc số liệu và đối chiếu</strong></summary>' +
+      '<dl class="br-gloss"><dt>Doanh số đặt hàng (GMV)</dt><dd>Giá trị đơn khách đặt theo Phân tích shop, gồm cả đơn sau đó bị hủy hoặc hoàn. Dùng để đo sức bán, không phải doanh thu kế toán.</dd>' +
+      '<dt>Doanh thu thuần</dt><dd>Tiền hàng của đơn đã quyết toán trừ phần hoàn cho khách, theo báo cáo quyết toán của TikTok.</dd>' +
+      '<dt>Lãi đóng góp</dt><dd>Doanh thu thuần trừ phí sàn, hoa hồng, quảng cáo, booking và giá vốn. Đây là phần kênh TikTok đóng góp để trả chi phí chung của công ty; chưa phải lợi nhuận kế toán.</dd>' +
+      '<dt>Điểm</dt><dd>Chênh lệch giữa hai tỷ lệ phần trăm (vd. từ 20% lên 22% là tăng 2 điểm).</dd>' +
+      '<dt>Lệch thời điểm</dt><dd>Quảng cáo ghi nhận theo ngày chạy, doanh thu theo ngày TikTok quyết toán (thường sau ngày giao hàng 7–14 ngày), nên tỷ lệ quảng cáo/doanh thu của từng tháng có độ trễ.</dd>' +
+      '<dt>Phần mềm quản lý bán hàng</dt><dd>Mục “lời/lỗ” trên các phần mềm quản lý đơn chỉ đúng khi đã khai giá vốn cho từng SKU; nếu giá vốn để 0 thì “lời” bằng doanh thu sau phí sàn.</dd></dl>' +
+      (chk.length ? '<h4>Đối chiếu nội bộ</h4>' + tbl(['Phép kiểm', 'Kết quả'], chk) : '') +
+      '<h4>Nguồn số liệu</h4>' + tbl(['Nguồn', 'Kỳ có số liệu', 'Dùng cho'], [
+        ['Phân tích shop (Seller Center)', sp.n ? cov(sp.coverage) : M.NODATA, 'doanh số, phễu bán hàng, kênh bán, xu hướng'],
+        ['Báo cáo quyết toán (income_….xlsx, sheet Báo cáo)', pl ? cov(pl.coverage) : M.NODATA, 'doanh thu, hoàn tiền, từng loại phí, tiền về'],
+        ['Chi phí tài khoản quảng cáo (Business Center)', pl && pl.adSrc === 'acct' ? cov(pl.adCov) : M.NODATA, 'chi phí quảng cáo gồm thuế nhà cung cấp tự thu'],
+        ['Booking nhà sáng tạo (danh sách nội bộ)', pl && pl.bookingN ? num(pl.bookingN) + ' lần' : 'không có', 'phí booking'],
+        ['Giá vốn, chi phí kênh (kế toán nhập)', pl && pl.mgmt.coverage ? cov(pl.mgmt.coverage) : pl && pl.cogsMethod === 'rate' ? 'tỷ lệ ước tính ' + M.fmtPct(pl.cogsRate, 1) : 'chưa nhập', 'giá vốn hàng bán, chi phí vận hành kênh'],
+        ['Danh sách video / phiên LIVE', (c.vl.n ? 'video ' + cov(c.vl.coverage) : '') + (c.vl.n && c.ll.n ? '; ' : '') + (c.ll.n ? 'LIVE ' + cov(c.ll.coverage) : '') || 'chưa có', 'năng suất nội dung'],
+        ['Tình trạng tài khoản (ghi nhận thủ công)', hs ? M.fmtDate(hs.date) : 'chưa có', 'gửi hàng muộn, hài lòng chat, vi phạm']]) + '</details>';
+    h += '</div>';
+    host.innerHTML = h;
+
+    // vẽ biểu đồ
+    var se = host.querySelector('[data-chart="br-seg"]');
+    if (se) C.segbar(se, { title: 'Khách đặt 100 đồng tiền hàng đi đâu', fmt: money, shareName: 'trên 100 đồng:', pct: function (x) { return num(x * 100, x * 100 < 9.95 ? 1 : 0) + ' đ'; },
+      parts: bp.parts.map(function (x) { return { label: x.label, value: x.value, color: brCol(x.k), ink: BR_INK[x.k] }; }) });
+    var fe = host.querySelector('[data-chart="br-funnel"]');
+    if (fe) {
+      var fmts = { impr: function (x) { return num(x, 0); }, ctr: function (x) { return M.fmtPct(x, 2); }, c2o: function (x) { return M.fmtPct(x, 2); }, aov: money };
+      C.divbars(fe, { title: 'Ảnh hưởng của từng yếu tố tới doanh số mỗi ngày', items: gr.funnel.map(function (x) { return { label: M.BRIEF_FACTOR[x.key], sub: fmts[x.key](x.a) + ' → ' + fmts[x.key](x.b) + ' (' + brTrend(x.a, x.b) + ')', value: x.impact, valueText: (x.impact >= 0 ? '+' : '−') + sMoney(Math.abs(x.impact)) + '/ngày' }; }), negLabel: 'Làm doanh số giảm', posLabel: 'Làm doanh số tăng' });
+    }
+    var che = host.querySelector('[data-chart="br-ch"]');
+    if (che) C.divbars(che, { title: 'Thay đổi doanh số mỗi ngày theo kênh', items: gr.channels.map(function (x) { return { label: x.label, sub: sMoney(x.a) + ' → ' + sMoney(x.b) + '/ngày', value: x.delta, valueText: (x.delta >= 0 ? '+' : '−') + sMoney(Math.abs(x.delta)) + '/ngày' }; }), negLabel: 'Giảm', posLabel: 'Tăng' });
+    var me = host.querySelector('[data-chart="br-mix"]');
+    if (me) C.hbars(me, { color: 'var(--series-1)', items: sp.channels.slice().sort(function (x, y) { return y.value - x.value; }).map(function (x) { return { label: x.label, value: x.value, valueText: sMoney(x.value) + ' · ' + pctOrDash(x.share, 0) }; }) });
+    var te = host.querySelector('[data-chart="br-trend"]');
+    if (te) C.columns(te, { name: 'Doanh số/ngày', x: b.months.map(function (m) { return m.month; }), values: b.months.map(function (m) { return m.gmvD; }),
+      colors: b.months.map(function (m) { return m.inPeriod ? 'var(--series-1)' : 'var(--neutral-mark)'; }), yFmt: M.fmtCompact, tipFmt: sMoney, height: 210,
+      xFmt: function (m) { return m.substr(5, 2) + '/' + m.substr(2, 2); }, tipTitle: function (m) { return 'Tháng ' + m.substr(5, 2) + '/' + m.substr(0, 4); },
+      flags: b.months.map(function (m) { return !m.full; }), flagNote: 'Tháng chưa đủ ngày số liệu',
+      extra: function (i) { var m = b.months[i]; return [{ name: 'doanh số cả tháng', value: sMoney(m.gmv) }, { name: 'ngày có số liệu', value: num(m.nDays) }]; } });
+  };
+
   root.TTSV = V;
 })(window);

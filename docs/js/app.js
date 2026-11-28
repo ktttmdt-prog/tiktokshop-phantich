@@ -6,6 +6,7 @@
   var S = { mode: null, cube: null, f: { from: '', to: '', shop: '', ent: '' }, preset: 'latest', tab: 'overview', remaining: 0, rankIndex: 0, detail: { dataset: 'ads_campaign', page: 0, q: '' }, cards: [], staffKey: null };
   var $ = function (s, el) { return (el || document).querySelector(s); }, $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
   var XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  var actions = {};
 
   function download(data, name, type) {
     var blob = data instanceof Blob ? data : new Blob([data], { type: type || 'application/octet-stream' });
@@ -167,14 +168,181 @@
   }
 
   // ================= KẾ TOÁN =================
-  var TABS = [['overview', 'Tổng quan'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['detail', 'Bảng chi tiết'], ['content', 'Video & Liên kết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Chia sẻ, sao lưu & cài đặt']];
+  var TABS = [['overview', 'Tổng quan'], ['brief', 'Bản tin điều hành'], ['shop', 'Hiệu quả shop'], ['growth', 'Cây chỉ số'], ['roas', 'ROAS & chiến dịch'], ['adsctl', 'Kiểm soát ads'], ['acc', 'Kiểm soát kế toán'], ['detail', 'Bảng chi tiết'], ['content', 'Video & Liên kết'], ['import', 'Nhập dữ liệu'], ['history', 'Lịch sử nhập'], ['settings', 'Chia sẻ, sao lưu & cài đặt']];
   function startAccountant() {
     S.mode = 'ketoan';
     header('Phân tích TikTok Shop', 'Chế độ kế toán – dữ liệu lưu trong trình duyệt của máy này',
-      '<button class="secondary" data-act="exportExcel">Xuất Excel</button> <button data-act="exportLeader">Gửi báo cáo lãnh đạo</button> <button class="link" data-act="switchMode">Đổi vai trò</button>');
+      installBtn() + '<button class="secondary" data-act="exportExcel">Xuất Excel</button> <button data-act="exportLeader">Gửi báo cáo lãnh đạo</button> <button class="link" data-act="switchMode">Đổi vai trò</button>');
     $('#main').innerHTML = '<p class="muted">Đang tải dữ liệu…</p>';
-    D.load().then(function () { S.cube = M.prepare(Q.build()); if (!S.f.from) applyPreset(S.preset); render(); }).catch(function (e) { $('#main').innerHTML = '<div class="nodata">Không mở được kho dữ liệu của trình duyệt: ' + esc(e.message) + '</div>'; });
+    D.load().then(function () { S.cube = M.prepare(Q.build()); if (!S.f.from) applyPreset(S.preset); render(); fdInit(); }).catch(function (e) { $('#main').innerHTML = '<div class="nodata">Không mở được kho dữ liệu của trình duyệt: ' + esc(e.message) + '</div>'; });
   }
+
+  // ================= CÀI ĐẶT ỨNG DỤNG LÊN MÁY (chạy như phần mềm, dùng được khi mất mạng) =================
+  function isInstalled() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function installBtn() { return S.installEvt && !isInstalled() ? '<button class="secondary" data-act="installApp" id="btnInstall">Cài lên máy tính</button> ' : ''; }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); S.installEvt = e;
+    var a = $('#actions'); if (a && !$('#btnInstall') && S.mode === 'ketoan') a.insertAdjacentHTML('afterbegin', installBtn());
+  });
+  window.addEventListener('appinstalled', function () { S.installEvt = null; var b = $('#btnInstall'); if (b) b.remove(); toast('Đã cài ứng dụng. Mở bằng biểu tượng “TikTok Shop” trên màn hình hoặc menu Start.'); });
+  actions.installApp = function () {
+    if (!S.installEvt) { toast('Trình duyệt chưa cho cài: mở menu ⋮ của Chrome → Truyền, lưu và chia sẻ → Cài đặt trang dưới dạng ứng dụng.', 'err'); return; }
+    S.installEvt.prompt(); S.installEvt.userChoice.then(function () { S.installEvt = null; var b = $('#btnInstall'); if (b) b.remove(); });
+  };
+  // Mở file bằng ứng dụng đã cài (chuột phải file Excel → Mở bằng → TikTok Shop)
+  if ('launchQueue' in window) window.launchQueue.setConsumer(function (params) {
+    if (!params.files || !params.files.length) return;
+    var go = function () {
+      S.tab = 'import'; render();
+      params.files.forEach(function (h) { h.getFile().then(function (f) { if (/\.ttsgoi$/i.test(f.name)) openPackage(f); else addFile(f.name, f.arrayBuffer(), null); }); });
+    };
+    if (S.mode === 'ketoan' && S.cube) go();
+    else { localStorage.setItem('tts-mode', 'ketoan'); S.pendingLaunch = go; if (S.mode && S.mode !== 'ketoan') location.hash = '#ketoan'; }
+  });
+
+  // ================= THƯ MỤC DỮ LIỆU: bỏ file xuất từ TikTok vào là ứng dụng tự nhập =================
+  /* Chỉ tự ghi nhận file “sạch”: nhận dạng được loại file, có kỳ, không chồng lấn kỳ, không có dòng lỗi.
+     File cần quyết định (thiếu kỳ, chồng lấn, lỗi, chưa rõ shop/phạm vi) hiện thành thẻ ở tab Nhập dữ liệu để kế toán xem rồi bấm Ghi nhận.
+     Mỗi lần tự nhập vẫn ghi vào Lịch sử nhập (hủy được). Nội dung file chỉ đọc trên máy này. */
+  var FD = { handle: null, perm: null, scanning: false, timer: null, session: {} };
+  var FD_EXT = /\.(xlsx|xlsm|csv)$/i;
+  function fdSupported() { return typeof window.showDirectoryPicker === 'function'; }
+  function fdInit() {
+    if (S.pendingLaunch) { var g = S.pendingLaunch; S.pendingLaunch = null; g(); }
+    if (!fdSupported()) return;
+    idbGet('folder:handle').then(function (h) {
+      FD.handle = h || null; if (!h) return;
+      return h.queryPermission({ mode: 'read' }).then(function (p) {
+        FD.perm = p;
+        if (p === 'granted') { fdScan(false); fdTimer(); } else if (S.tab === 'import' || S.tab === 'overview') render();
+      });
+    }).catch(function () { FD.perm = null; });
+  }
+  function fdTimer() {
+    clearInterval(FD.timer);
+    FD.timer = setInterval(function () { if (S.mode === 'ketoan' && FD.perm === 'granted' && document.visibilityState === 'visible') fdScan(false); }, 60000);
+  }
+  function fdWalk(dir, path, depth, out) {
+    if (depth > 4) return Promise.resolve(out);
+    var it = dir.values(), subs = [];
+    var next = function () {
+      return it.next().then(function (r) {
+        if (r.done) return;
+        var e = r.value, p = path ? path + '/' + e.name : e.name;
+        if (e.kind === 'directory') { if (!/^[._~$]/.test(e.name)) subs.push([e, p]); }
+        else if (FD_EXT.test(e.name) && !/^~\$/.test(e.name)) out.push({ handle: e, path: p, dir: path });
+        return next();
+      });
+    };
+    return next().then(function () { return subs.reduce(function (pr, s) { return pr.then(function () { return fdWalk(s[0], s[1], depth + 1, out); }); }, Promise.resolve()); }).then(function () { return out; });
+  }
+  function fdSegs(path) { return path ? path.split('/').map(function (s) { return K.norm(s); }) : []; }
+  function fdShopFor(dir) {
+    var shops = D.settings.shops || [];
+    if (shops.length === 1) return shops[0].id;
+    var segs = fdSegs(dir), hit = shops.filter(function (s) { return segs.indexOf(K.norm(s.name)) >= 0; })[0];
+    if (hit) return hit.id;
+    return D.settings.folderShop && shops.some(function (s) { return s.id === D.settings.folderShop; }) ? D.settings.folderShop : '';
+  }
+  function fdScopeFor(dir) { // null = chưa rõ phạm vi (khi đã có nhiều phạm vi video)
+    var sc = D.settings.scopes || [];
+    if (sc.length <= 1) return '';
+    var segs = fdSegs(dir), hit = sc.filter(function (s) { return segs.indexOf(K.norm(s)) >= 0; })[0];
+    return hit || null;
+  }
+  function fdOne(x, file) {
+    var up;
+    return file.arrayBuffer().then(function (buf) { return I.addUpload(file.name, buf); }).then(function (u) {
+      up = u;
+      var scope = fdScopeFor(x.dir), req = { uploadId: up.id, shopId: fdShopFor(x.dir), newShop: '', scope: scope || '', from: '', to: '', category: 'auto' };
+      return I.ready(req).then(function () {
+        var p = I.preview(req), c = function (k) { return p.counts ? p.counts[k] : 0; };
+        if (!p.recognized) { I.dropUpload(up.id); return { bucket: 'unknown', msg: 'không nhận dạng được loại file' }; }
+        var ds = SC.get(p.dataset);
+        var hold = p.needShop ? 'chưa rõ shop – chọn shop' : p.needPeriod ? 'file không ghi kỳ – nhập từ ngày, đến ngày' : p.blocked ? p.message
+          : c('conflict') ? 'kỳ chồng lấn với dữ liệu đã nhập' : c('error') ? c('error') + ' dòng lỗi' : ds && ds.hasScope && scope === null ? 'chọn phạm vi (kênh) của file' : '';
+        if (!hold && c('new') + c('update') === 0) { I.discard(p.token); I.dropUpload(up.id); return { bucket: 'same', msg: p.datasetLabel + ': đã có đủ, không có dòng mới' }; }
+        if (hold) {
+          S.cards.unshift({ id: 'c' + Math.random().toString(36).slice(2), name: file.name, state: 'ready', uploadId: up.id, p: p, sender: 'thư mục: ' + x.path, note: 'Từ thư mục: ' + x.path,
+            opts: { shopId: req.shopId, newShop: '', scope: req.scope, from: '', to: '', category: 'auto' } });
+          return { bucket: 'review', msg: (p.datasetLabel || '') + ': ' + hold, session: true };
+        }
+        return I.commit({ token: p.token, replaceConflicts: false, note: 'Tự nhập từ thư mục: ' + x.path, sender: 'Thư mục dữ liệu', user: 'Kế toán' }).then(function (r) {
+          I.dropUpload(up.id);
+          return { bucket: 'auto', id: r.id, msg: p.datasetLabel + ' · ' + M.fmtPeriod(r.from, r.to) + ': ' + M.fmtNum(r['new']) + ' dòng mới' + (r.update ? ', ' + M.fmtNum(r.update) + ' cập nhật' : '') + (r.dup ? ', ' + M.fmtNum(r.dup) + ' trùng bỏ qua' : '') };
+        });
+      });
+    }).catch(function (e) { if (up) I.dropUpload(up.id); return { bucket: 'failed', msg: e.message }; });
+  }
+  function fdScan(manual) {
+    if (!FD.handle || FD.scanning || FD.perm !== 'granted') return Promise.resolve();
+    FD.scanning = true;
+    var res = { time: K.nowStr(), auto: [], review: [], same: [], unknown: [], failed: [], total: 0 };
+    return Promise.all([fdWalk(FD.handle, '', 0, []), idbGet('folder:seen')]).then(function (r) {
+      var files = r[0], seen = r[1] || {}; res.total = files.length;
+      var todo = [];
+      return files.reduce(function (pr, x) {
+        return pr.then(function () { return x.handle.getFile(); }).then(function (file) {
+          var key = x.path + '|' + file.size + '|' + file.lastModified;
+          if (seen[key] || FD.session[key]) return;
+          todo.push(x.path);
+          busy(true, 'Đang đọc file từ thư mục dữ liệu: ' + x.path);
+          return fdOne(x, file).then(function (st) {
+            res[st.bucket].push({ path: x.path, msg: st.msg, id: st.id || null });
+            if (st.session) FD.session[key] = 1; else seen[key] = { st: st.bucket, t: res.time, id: st.id || null };
+          });
+        }).catch(function (e) { res.failed.push({ path: x.path, msg: e.message }); });
+      }, Promise.resolve()).then(function () { return idbSet('folder:seen', seen); });
+    }).then(function () {
+      FD.scanning = false; busy(false);
+      var n = res.auto.length + res.review.length + res.same.length + res.unknown.length + res.failed.length;
+      FD.lastCheck = { time: res.time, total: res.total };
+      if (n) { try { localStorage.setItem('tts-folder-last', JSON.stringify(res)); } catch (e) { } }
+      if (res.auto.length) { S.cube = M.prepare(Q.build()); }
+      if (n || manual) render();
+      if (res.auto.length || res.review.length) toast('Thư mục dữ liệu: tự nhập ' + res.auto.length + ' file' + (res.review.length ? ', ' + res.review.length + ' file cần xem ở tab Nhập dữ liệu' : '') + '.');
+      else if (manual) toast('Không có file mới trong thư mục (' + res.total + ' file đã kiểm tra).');
+    }).catch(function (e) { FD.scanning = false; busy(false); if (e && e.name === 'NotAllowedError') { FD.perm = 'prompt'; render(); } toast('Không đọc được thư mục: ' + e.message, 'err'); });
+  }
+  actions.fdPick = function () {
+    window.showDirectoryPicker({ id: 'tts-data', mode: 'read' }).then(function (h) {
+      FD.handle = h; FD.perm = 'granted'; FD.session = {};
+      return idbSet('folder:handle', h).then(function () { toast('Đã chọn thư mục “' + h.name + '”. Đang kiểm tra file…'); fdTimer(); return fdScan(true); });
+    }).catch(function (e) { if (e && e.name !== 'AbortError') toast(e.message, 'err'); });
+  };
+  actions.fdAllow = function () {
+    if (!FD.handle) return;
+    FD.handle.requestPermission({ mode: 'read' }).then(function (p) { FD.perm = p; if (p === 'granted') { fdTimer(); fdScan(true); } else render(); });
+  };
+  actions.fdScan = function () { if (FD.perm !== 'granted') return actions.fdAllow(); fdScan(true); };
+  actions.fdRescan = function () {
+    if (!confirm('Kiểm tra lại toàn bộ file trong thư mục? Dòng đã có sẽ được nhận là trùng và bỏ qua, không cộng 2 lần.')) return;
+    FD.session = {}; idbSet('folder:seen', {}).then(function () { actions.fdScan(); });
+  };
+  actions.fdForget = function () {
+    if (!confirm('Ngừng theo dõi thư mục này? Dữ liệu đã nhập vẫn giữ nguyên.')) return;
+    clearInterval(FD.timer); FD.handle = null; FD.perm = null; FD.session = {};
+    Promise.all([idbSet('folder:handle', null), idbSet('folder:seen', {})]).then(function () { localStorage.removeItem('tts-folder-last'); render(); });
+  };
+  function fdPanel() {
+    var h = '<div class="card fd"><h3>Thư mục dữ liệu – bỏ file vào là tự nhập</h3>';
+    if (!fdSupported()) return h + '<p class="small">Trình duyệt này chưa hỗ trợ đọc thư mục. Dùng Chrome hoặc Edge trên máy tính (hoặc ứng dụng đã cài) để bật tính năng này; vẫn có thể chọn file thủ công ở dưới.</p></div>';
+    if (!FD.handle) return h + '<p class="small">Chọn một thư mục trên máy (vd. <code>37. TIKTOK\\DU LIEU TIKTOK</code>) và đặt Chrome lưu file xuất từ TikTok vào đó. Mỗi lần mở ứng dụng, và mỗi phút khi đang mở, ứng dụng tự đọc file mới: file đủ thông tin được ghi nhận ngay, file cần quyết định hiện thành thẻ bên dưới.</p>' +
+      '<div class="form-row"><button data-act="fdPick">Chọn thư mục dữ liệu</button></div><p class="small muted">Ứng dụng chỉ xin quyền <strong>đọc</strong> thư mục; không sửa, không xóa file và không gửi file đi đâu.</p></div>';
+    var last = null; try { last = JSON.parse(localStorage.getItem('tts-folder-last') || 'null'); } catch (e) { }
+    h += '<p>Đang theo dõi thư mục <strong>' + esc(FD.handle.name) + '</strong>' + (FD.perm === 'granted' ? ' · <span class="ok">đang tự kiểm tra mỗi phút</span>' : ' · <span class="warn-t">cần cho phép đọc lại</span>') + (FD.lastCheck ? '<span class="muted small"> · kiểm tra lúc ' + esc(FD.lastCheck.time.slice(11)) + ', ' + FD.lastCheck.total + ' file</span>' : '') + '</p>';
+    h += '<div class="form-row">' + (FD.perm === 'granted' ? '<button data-act="fdScan">Kiểm tra file mới ngay</button>' : '<button data-act="fdAllow">Cho phép đọc thư mục</button>') +
+      ' <button class="secondary" data-act="fdPick">Đổi thư mục</button> <button class="link" data-act="fdRescan">Kiểm tra lại toàn bộ</button> <button class="link" data-act="fdForget">Ngừng theo dõi</button></div>';
+    if ((D.settings.shops || []).length > 1) h += '<div class="form-row small"><label>Shop mặc định cho file trong thư mục<select id="fdShop"><option value="">— chưa chọn (file sẽ chờ chọn shop) —</option>' + D.settings.shops.map(function (s) { return '<option value="' + esc(s.id) + '"' + (D.settings.folderShop === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') + '</select></label><span class="hint">Hoặc đặt file vào thư mục con trùng tên shop.</span></div>';
+    if ((D.settings.scopes || []).length > 1) h += '<p class="small muted">File Video thuộc phạm vi khác “Tất cả kênh”: đặt vào thư mục con trùng tên phạm vi (' + D.settings.scopes.map(esc).join(', ') + ').</p>';
+    if (last) {
+      var grp = [['auto', 'Đã tự nhập', 'ok'], ['review', 'Cần xem (thẻ bên dưới)', 'warn-t'], ['same', 'Đã có đủ, bỏ qua', 'muted'], ['unknown', 'Không phải file TikTok', 'muted'], ['failed', 'Không đọc được', 'err']];
+      h += '<details' + (last.auto.length || last.review.length || last.failed.length ? ' open' : '') + '><summary>Lần có file mới gần nhất: ' + esc(last.time) + '</summary><ul class="errlist">' +
+        grp.map(function (g) { return last[g[0]].map(function (x) { return '<li><span class="' + g[2] + '">' + g[1] + '</span> · ' + esc(x.path) + (x.msg ? ' – ' + esc(x.msg) : '') + (x.id ? ' (lần nhập #' + x.id + ')' : '') + '</li>'; }).join(''); }).join('') + '</ul></details>';
+    }
+    return h + '</div>';
+  }
+  document.addEventListener('change', function (ev) { if (ev.target.id === 'fdShop') { D.settings.folderShop = ev.target.value || null; D.saveMeta().then(function () { toast('Đã lưu shop mặc định cho thư mục.'); }); } });
   function rebuild() { S.cube = M.prepare(Q.build()); render(); }
   function monthEnd(s) { return M.iso(new Date(+s.substr(0, 4), +s.substr(5, 2), 0)); }
   function latestDate(c) {
@@ -201,8 +369,9 @@
     $('#filters').style.display = noF ? 'none' : ''; if (!noF) renderFilters();
     if (window.TTSC) window.TTSC.hideTip();
     var warn = backupBanner();
+    if (FD.handle && FD.perm && FD.perm !== 'granted' && t !== 'import') warn += '<div class="banner">Thư mục dữ liệu <strong>' + esc(FD.handle.name) + '</strong> cần được cho phép đọc lại để tự nhập file mới. <button class="link" data-act="fdAllow">Cho phép đọc thư mục</button></div>';
     try {
-      if (t === 'overview') V.overview(main, ctx()); else if (t === 'shop') V.shop(main, ctx()); else if (t === 'roas') V.roas(main, ctx());
+      if (t === 'overview') V.overview(main, ctx()); else if (t === 'brief') V.brief(main, ctx()); else if (t === 'shop') V.shop(main, ctx()); else if (t === 'roas') V.roas(main, ctx());
       else if (t === 'adsctl') V.adsControl(main, ctx()); else if (t === 'growth') V.growth(main, ctx()); else if (t === 'acc') V.accounting(main, ctx()); else if (t === 'content') V.content(main, ctx()); else if (t === 'detail') renderDetail(main);
       else if (t === 'import') renderImport(main); else if (t === 'history') renderHistory(main); else if (t === 'settings') renderSettings(main);
       if (warn) main.insertAdjacentHTML('afterbegin', warn);
@@ -241,9 +410,9 @@
     else if (ev.target.getAttribute('data-act') === 'rankIndex') { S.rankIndex = Number(ev.target.value) || 0; render(); }
     else if (id === 'detDs') { S.detail.dataset = ev.target.value; S.detail.page = 0; render(); }
   });
-  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (S.mode === 'ketoan' && ['overview', 'shop', 'roas', 'adsctl', 'content'].indexOf(S.tab) >= 0) render(); }, 250); });
+  var rt; window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { if (S.mode === 'ketoan' && ['overview', 'brief', 'shop', 'roas', 'adsctl', 'content'].indexOf(S.tab) >= 0) render(); }, 250); });
 
-  var actions = {};
+  /* (đã khai báo actions ở đầu file) */
   actions.switchMode = switchMode;
   actions.viewerLast = function () { idbGet('viewer:last').then(function (p) { if (p) W.unlock($('#viewer'), p); }); };
   actions.exportExcel = function () {
@@ -257,10 +426,17 @@
     }).catch(function (e) { busy(false); toast(e.message, 'err'); });
   };
   function shareCube() {
-    var c = S.cube, f = S.f, keep = function (r) { var a = r.from || r.date, b = r.to || r.date; return (!f.shop || r.shop === f.shop) && !(b < f.from || a > f.to); };
-    var pick = function (sec) { var cols = c[sec].cols; return { cols: cols, rows: c['_' + sec].filter(keep).map(function (o) { return cols.map(function (k) { return o[k]; }); }) }; };
+    // kèm kỳ liền trước (để so sánh) – chỉ số liệu tổng hợp; Phân tích shop kèm toàn bộ các tháng để vẽ xu hướng
+    var c = S.cube, f = S.f, lo = M.prevPeriod(f.from, f.to).from;
+    var keepIn = function (a0) { return function (r) { var a = r.from || r.date, b = r.to || r.date; return (!f.shop || r.shop === f.shop) && !(b < a0 || a > f.to); }; };
+    var pick = function (sec, a0) { var cols = c[sec].cols; return { cols: cols, rows: c['_' + sec].filter(keepIn(a0)).map(function (o) { return cols.map(function (k) { return o[k]; }); }) }; };
     var out = { generatedAt: c.generatedAt, today: c.today, thresholds: c.thresholds, official: c.official, shops: (c.shops || []).filter(function (s) { return !f.shop || s.id === f.shop; }) };
-    ['ads', 'acct', 'inv', 'ord', 'stl', 'stlr', 'vid', 'aff', 'shop', 'booking', 'vlist', 'llist'].forEach(function (k) { out[k] = pick(k); }); out.market = c.market || []; out.health = c.health || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
+    ['inv', 'stl'].forEach(function (k) { out[k] = pick(k, f.from); });
+    ['ads', 'acct', 'ord', 'stlr', 'vid', 'aff', 'booking', 'vlist', 'llist'].forEach(function (k) { out[k] = pick(k, lo); });
+    out.shop = pick('shop', '0000-01-01');
+    out.market = c.market || []; out.health = c.health || []; out.gmvMaxAccount = c.gmvMaxAccount || '';
+    out.mgmt = { cogsRate: c.mgmt ? c.mgmt.cogsRate : null, entries: ((c.mgmt && c.mgmt.entries) || []).filter(function (e) { return (!f.shop || !e.shop || e.shop === f.shop) && !(e.to < lo || e.from > f.to); }) };
+    var keep = keepIn(f.from);
     var tp = {}, tc = c.topup.cols;
     c._topup.filter(keep).forEach(function (r) { var k = [r.shop, r.date, r.accountId, r.cls, r.pay, r.ok].join('|'); var a = tp[k] || (tp[k] = { shop: r.shop, date: r.date, time: r.date, accountId: r.accountId, accountName: r.accountName, type: 'Tổng trong ngày', subtype: '', status: r.ok ? 'Thành công' : 'Không thành công', moneyType: '', amount: 0, voucher: '', imp: 0, cls: r.cls, pay: r.pay, ok: r.ok }); a.amount += r.amount; });
     out.topup = { cols: tc, rows: Object.keys(tp).map(function (k) { return tc.map(function (x) { return tp[k][x]; }); }) };
@@ -318,7 +494,7 @@
   // ----- Nhập dữ liệu -----
   function shopOptions(sel) { return '<option value="">— Chọn shop —</option>' + D.settings.shops.map(function (s) { return '<option value="' + esc(s.id) + '"' + (sel === s.id ? ' selected' : '') + '>' + esc(s.name) + '</option>'; }).join('') + '<option value="__new">+ Thêm shop mới…</option>'; }
   function renderImport(main) {
-    main.innerHTML = '<h2>Nhập file Excel / CSV xuất từ TikTok</h2><ol class="steps"><li>Chọn <strong>shop</strong> của file (file TikTok thường không ghi tên shop).</li><li>Chọn file (nhiều file được), hoặc gói <code>.ttsgoi</code> nhân sự gửi.</li><li>Xem trước số dòng <strong>mới / trùng / cập nhật / chồng lấn / lỗi</strong> rồi bấm <strong>Ghi nhận</strong>. Dòng trùng không bao giờ bị cộng 2 lần.</li></ol>' +
+    main.innerHTML = fdPanel() + '<h2>Nhập file Excel / CSV xuất từ TikTok</h2><ol class="steps"><li>Chọn <strong>shop</strong> của file (file TikTok thường không ghi tên shop).</li><li>Chọn file (nhiều file được), hoặc gói <code>.ttsgoi</code> nhân sự gửi.</li><li>Xem trước số dòng <strong>mới / trùng / cập nhật / chồng lấn / lỗi</strong> rồi bấm <strong>Ghi nhận</strong>. Dòng trùng không bao giờ bị cộng 2 lần.</li></ol>' +
       '<div class="card form"><div class="form-row"><label>Shop <select id="impShop">' + shopOptions(S.impShop || '') + '</select></label><label id="impNewWrap" style="display:none">Tên shop mới<input id="impNew"></label>' +
       '<label>Phạm vi (file Video)<input id="impScope" list="scopeList" placeholder="Tất cả kênh" value="' + esc(S.impScope || '') + '"><datalist id="scopeList">' + D.settings.scopes.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('') + '</datalist></label></div>' +
       '<div class="form-row"><label>Kỳ dữ liệu – từ<input type="date" id="impFrom" value="' + (S.impFrom || '') + '"></label><label>đến<input type="date" id="impTo" value="' + (S.impTo || '') + '"></label><span class="hint">Chỉ cần khi file không ghi kỳ (file Cost, chi tiết hóa đơn).</span></div>' +
@@ -466,6 +642,16 @@
       '<label class="grow">Ghi chú<input id="hlNote" placeholder="vd: còn 1 vi phạm có thể khiếu nại"></label><button data-act="addHealth">Thêm</button></div>' +
       '<p class="small muted">Lấy ở Seller Center → Tình trạng tài khoản → Điểm tình trạng tài khoản (mục Tổng quan và Hồ sơ vi phạm). TikTok chưa cho xuất file mục này nên ghi nhận thủ công mỗi tuần; số liệu hiện ở tab Cây chỉ số.</p>' +
       (hl.length ? '<div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Ngày</th><th>Điểm</th><th>Gửi hàng muộn</th><th>Hài lòng chat</th><th>Vi phạm</th><th>Đóng băng</th><th>Ghi chú</th><th></th></tr></thead><tbody>' + hl.map(function (x) { return '<tr><td>' + M.fmtDate(x.date) + '</td><td>' + M.fmtNum(x.score) + '</td><td>' + M.fmtPct(x.late, 2) + '</td><td>' + M.fmtPct(x.chat, 2) + '</td><td>' + M.fmtNum(x.violations) + '</td><td>' + M.fmtNum(x.frozen) + '</td><td>' + esc(x.note || '') + '</td><td><button class="link" data-act="delHealth" data-id="' + esc(x.id) + '">Xóa</button></td></tr>'; }).join('') + '</tbody></table></div>' : '') + '</div>';
+    var mg = D.settings.mgmt || {}, me = (mg.entries || []).slice().sort(function (a, b) { return a.from < b.from ? 1 : -1; });
+    h += '<h2>Giá vốn và chi phí kênh (cho Bản tin điều hành)</h2><div class="card form">' +
+      '<p class="small">Nhập theo sổ kế toán cho đúng kỳ quyết toán của TikTok (vd. 01/10 – 31/10). Bản tin chỉ dùng khoản nằm trọn trong kỳ xem; giá vốn thực tế phải phủ đủ mọi ngày của kỳ quyết toán, nếu thiếu sẽ dùng tỷ lệ ước tính bên dưới và ghi rõ “ước tính”.</p>' +
+      '<div class="form-row"><label>Từ ngày<input type="date" id="mgFrom"></label><label>Đến ngày<input type="date" id="mgTo"></label>' +
+      '<label>Giá vốn hàng bán (đ)<input id="mgCogs" inputmode="numeric" placeholder="vd: 1.000.000"></label><label>Chi phí vận hành kênh (đ)<input id="mgOpex" inputmode="numeric" placeholder="nhân sự LIVE, studio…"></label>' +
+      '<label>Shop<select id="mgShop"><option value="">Toàn bộ shop</option>' + D.settings.shops.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="grow">Ghi chú / nguồn số liệu<input id="mgNote" placeholder="vd: TK 632 chi tiết kênh TikTok"></label><button data-act="addMgmt">Thêm</button></div>' +
+      (me.length ? '<div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Từ ngày</th><th>Đến ngày</th><th>Shop</th><th class="num">Giá vốn</th><th class="num">Chi phí vận hành</th><th>Ghi chú</th><th></th></tr></thead><tbody>' + me.map(function (x) { return '<tr><td>' + M.fmtDate(x.from) + '</td><td>' + M.fmtDate(x.to) + '</td><td>' + (x.shop ? esc(D.shopName(x.shop)) : 'Toàn bộ') + '</td><td class="num">' + (x.cogs == null ? '—' : M.fmtMoney(x.cogs)) + '</td><td class="num">' + (x.opex == null ? '—' : M.fmtMoney(x.opex)) + '</td><td>' + esc(x.note || '') + '</td><td><button class="link" data-act="delMgmt" data-id="' + esc(x.id) + '">Xóa</button></td></tr>'; }).join('') + '</tbody></table></div>' : '') +
+      '<div class="form-row"><label>Tỷ lệ giá vốn ước tính (% doanh thu thuần)<input id="mgRate" placeholder="để trống nếu không dùng" value="' + (typeof mg.cogsRate === 'number' ? M.fmtNum(mg.cogsRate * 100, 2) : '') + '"></label><button class="secondary" data-act="saveCogsRate">Lưu tỷ lệ</button></div>' +
+      '<p class="small muted">Tỷ lệ ước tính chỉ dùng cho kỳ chưa có giá vốn thực tế (vd. tháng đang chạy). Số liệu này nằm trong trình duyệt máy này và trong báo cáo lãnh đạo đã mã hóa, không gửi đi nơi khác.</p></div>';
     h += '<h2>Shop</h2><div class="card form">' + D.settings.shops.map(function (s) { return '<div class="form-row"><label>' + esc(s.id) + '<input data-shop="' + esc(s.id) + '" value="' + esc(s.name) + '"></label></div>'; }).join('') + '<div class="form-row"><label>Thêm shop<input id="setNewShop" placeholder="Tên shop"></label><button data-act="saveShops">Lưu</button></div></div>';
     h += '<h2>Bảng ánh xạ cột nguồn → chỉ tiêu</h2><p class="note">So khớp tên cột không phân biệt dấu, hoa/thường, bỏ phần trong ngoặc. Cột thông tin cá nhân không bao giờ được lưu.</p>' + SC.all.map(function (d) {
       return '<details class="card"><summary><strong>' + esc(d.label) + '</strong></summary><p class="small">' + esc(d.desc) + '<br><span class="muted">Nguồn: ' + esc(d.source) + '</span></p><div class="tbl-wrap"><table class="tbl dense"><thead><tr><th>Chỉ tiêu</th><th>Kiểu</th><th>Bắt buộc</th><th>Tên cột nguồn được nhận</th><th>Ghi chú</th></tr></thead><tbody>' +
@@ -507,6 +693,24 @@
     D.saveMeta().then(function () { toast('Đã ghi nhận tình trạng tài khoản.'); rebuild(); });
   };
   actions.delHealth = function (b) { var id = b.getAttribute('data-id'); D.settings.health = (D.settings.health || []).filter(function (m) { return m.id !== id; }); D.saveMeta().then(function () { rebuild(); }); };
+  function moneyIn(id) { var s = $('#' + id).value.trim().replace(/\s|đ/g, ''); if (!s) return null; var neg = /^[-−(]/.test(s), v = Number(s.replace(/[^\d,]/g, '').replace(',', '.')); return isFinite(v) ? (neg ? -v : v) : NaN; }
+  actions.addMgmt = function () {
+    var from = $('#mgFrom').value, to = $('#mgTo').value, cogs = moneyIn('mgCogs'), opex = moneyIn('mgOpex');
+    if (!from || !to || from > to) { toast('Nhập kỳ từ ngày – đến ngày.', 'err'); return; }
+    if ((cogs == null && opex == null) || (cogs != null && isNaN(cogs)) || (opex != null && isNaN(opex))) { toast('Nhập giá vốn hoặc chi phí vận hành (số tiền đồng).', 'err'); return; }
+    var mg = D.settings.mgmt = D.settings.mgmt || {}; mg.entries = mg.entries || [];
+    var shop = $('#mgShop').value || '';
+    if (mg.entries.some(function (e) { return (e.shop || '') === shop && !(e.to < from || e.from > to) && ((cogs != null && e.cogs != null) || (opex != null && e.opex != null)); })) { toast('Kỳ này đã có số liệu trùng ngày – xóa dòng cũ trước khi nhập lại.', 'err'); return; }
+    mg.entries.push({ id: 'g' + Date.now().toString(36), from: from, to: to, shop: shop, cogs: cogs, opex: opex, note: $('#mgNote').value.trim() });
+    D.saveMeta().then(function () { toast('Đã lưu giá vốn / chi phí kênh.'); rebuild(); });
+  };
+  actions.delMgmt = function (b) { var id = b.getAttribute('data-id'), mg = D.settings.mgmt || {}; mg.entries = (mg.entries || []).filter(function (e) { return e.id !== id; }); D.saveMeta().then(function () { rebuild(); }); };
+  actions.saveCogsRate = function () {
+    var s = $('#mgRate').value.trim().replace('%', ''), mg = D.settings.mgmt = D.settings.mgmt || {};
+    if (!s) mg.cogsRate = null;
+    else { var v = Number(s.replace(',', '.')); if (!(v > 0 && v < 100)) { toast('Tỷ lệ phải từ 0 đến 100%.', 'err'); return; } mg.cogsRate = v / 100; }
+    D.saveMeta().then(function () { toast('Đã lưu tỷ lệ giá vốn ước tính.'); rebuild(); });
+  };
   actions.delMarket = function (b) { var id = b.getAttribute('data-id'); D.settings.market = (D.settings.market || []).filter(function (m) { return m.id !== id; }); D.saveMeta().then(function () { rebuild(); }); };
   actions.saveShops = function () {
     $$('[data-shop]').forEach(function (i) { var s = D.settings.shops.filter(function (x) { return x.id === i.getAttribute('data-shop'); })[0]; if (s && i.value.trim()) s.name = i.value.trim(); });
@@ -519,5 +723,5 @@
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { });
     boot();
   });
-  window.TTSApp = { S: S, rebuild: rebuild };
+  window.TTSApp = { S: S, rebuild: rebuild, fd: { use: function (h) { FD.handle = h; FD.perm = 'granted'; FD.session = {}; }, scan: function () { return fdScan(true); }, state: FD } };
 })();

@@ -109,6 +109,8 @@
     o.llist = { cols: ['shop', 'scope', 'date', 'start', 'account', 'dur', 'gmv', 'gmvDirect', 'orders', 'items', 'buyers', 'viewers', 'views', 'avgWatch', 'impr', 'clicks', 'comments', 'likes', 'shares', 'followers', 'partial', 'imp'],
       rows: active('live_list').map(function (r) { var v = r.v; return [r.shop, r.scope, r.from, v.start_time, v.handle || v.creator || v.creator_id || '', n(v.duration), n(v.gmv), nv(v.gmv_direct), n(v.orders), n(v.items), n(v.buyers), n(v.viewers), n(v.views), nv(v.avg_watch), n(v.impressions), n(v.clicks), n(v.comments), n(v.likes), n(v.shares), n(v.followers), part(r), r.imp]; }) };
     o.health = (D.settings.health || []).slice();
+    var mg = D.settings.mgmt || {};
+    o.mgmt = { cogsRate: typeof mg.cogsRate === 'number' ? mg.cogsRate : null, entries: (mg.entries || []).slice() };
     o.imports = D.imports.map(function (i) { return { id: i.id, time: i.time, user: i.user, fileName: i.fileName, dataset: i.dataset, datasetLabel: i.datasetLabel, shopName: i.shopName, scope: i.scope, from: i.from, to: i.to, 'new': i['new'], dup: i.dup, update: i.update, conflict: i.conflict, replaced: i.replaced, error: i.error, rolledBack: i.rolledBack }; });
     return o;
   };

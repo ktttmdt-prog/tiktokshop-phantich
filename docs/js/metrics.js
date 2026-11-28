@@ -555,6 +555,144 @@
   };
   M.healthTargets = { late: 0.04, chat: 0.70 };
 
+  // ---------- BẢN TIN ĐIỀU HÀNH: kết quả kinh doanh kênh TikTok theo kế toán quản trị ----------
+  /* Giá vốn và chi phí vận hành kênh do kế toán nhập theo kỳ (lấy từ sổ sách). Chỉ dùng khoản nằm trọn trong kỳ lọc.
+     Khoản nhập cho “toàn bộ shop” chỉ áp dụng khi xem tất cả shop (hoặc dữ liệu chỉ có một shop). */
+  M.mgmtCosts = function (cube, f) {
+    var mg = cube.mgmt || {}, ex = [], single = (cube.shops || []).length <= 1;
+    var ent = (mg.entries || []).filter(function (e) {
+      if (e.shop) { if (f.shop && e.shop !== f.shop) return false; } else if (f.shop && !single) return false;
+      return incl(e, f, ex);
+    });
+    var has = function (k) { return ent.some(function (e) { return typeof e[k] === 'number'; }); };
+    return { entries: ent, excluded: ex, cogs: has('cogs') ? sum(ent, 'cogs') : null, opex: has('opex') ? sum(ent, 'opex') : null,
+      rate: typeof mg.cogsRate === 'number' && mg.cogsRate > 0 && mg.cogsRate < 1 ? mg.cogsRate : null, coverage: range(ent, 'from', 'to') };
+  };
+  function daysOf(a, b, into) { for (var d = a; d <= b; d = addDays(d, 1)) into[d] = 1; return into; }
+  /* Báo cáo kết quả theo dòng tiền quyết toán: doanh số → hoàn tiền → doanh thu thuần → phí sàn → quảng cáo → giá vốn → lãi đóng góp.
+     Số âm = khoản trừ. Thuế do sàn khấu trừ thay không phải chi phí kinh doanh: chỉ dùng để khớp với tiền sàn trả về. */
+  function plCalc(cube, f, sr, acct, ads) {
+    if (!sr || !sr.n) return null;
+    var t = sr.t, g = {}, lines = {};
+    sr.groups.forEach(function (x) { g[x.key] = x.amount; x.lines.forEach(function (l) { lines[l.key] = l.amount; }); });
+    var p = { coverage: sr.coverage, partial: sr.partial, n: sr.n, lines: lines, calcDiff: sr.calcDiff, feeLinesDiff: sr.feeLinesDiff, revDiff: sr.revDiff };
+    p.gross = t.gross_after || null; p.refund = t.refund_after || 0; p.net = t.revenue_total || 0;
+    p.platform = g.platform || 0; p.promo = g.promo || 0; p.creator = g.creator || 0; p.adsStl = g.ads || 0; p.taxWithheld = g.tax || 0;
+    p.otherFees = Math.round((t.fees_total || 0) - (p.platform + p.promo + p.creator + p.adsStl + p.taxWithheld));
+    p.adj = t.adj_total || 0;
+    p.fees = p.platform + p.promo + p.creator + p.adsStl + p.otherFees;
+    p.afterPlatform = p.net + p.fees + p.adj;
+    p.settlement = t.settlement_total || 0;
+    p.cashCheck = Math.round(p.afterPlatform + p.taxWithheld - p.settlement);
+    p.days = p.coverage ? dayCount(p.coverage.from, p.coverage.to) : 0;
+    // quảng cáo: file Chi phí của Business Center (chi phí + thuế nhà cung cấp tự thu, không được khấu trừ) – thiếu thì lấy báo cáo chiến dịch
+    if (acct && acct.n) { p.adCost = -(acct.amount + (acct.hasTax ? acct.tax : 0)); p.adTax = acct.hasTax ? acct.tax : null; p.adSrc = 'acct'; p.adCov = acct.coverage; }
+    else if (ads && ads.n) { p.adCost = -ads.cost; p.adTax = null; p.adSrc = 'campaign'; p.adCov = ads.coverage; }
+    else { p.adCost = null; p.adSrc = null; p.adCov = null; }
+    var bk = (cube._booking || []).filter(function (r) { return (!f.shop || r.shop === f.shop) && r.date >= f.from && r.date <= f.to; });
+    p.booking = bk.length ? -sum(bk, 'fee') : 0; p.bookingN = bk.length;
+    // giá vốn: số thực tế phải phủ đủ mọi ngày của kỳ quyết toán; không đủ thì dùng tỷ lệ ước tính (nếu có)
+    var mc = M.mgmtCosts(cube, f), need = {}, got = {};
+    sr.byPeriod.forEach(function (x) { daysOf(x.from, x.to, need); });
+    mc.entries.forEach(function (e) { if (typeof e.cogs === 'number') daysOf(e.from, e.to, got); });
+    var missing = Object.keys(need).filter(function (d) { return !got[d]; }).sort();
+    p.mgmt = mc; p.cogsMissing = missing;
+    if (mc.cogs != null && !missing.length) { p.cogsMethod = 'actual'; p.cogs = -mc.cogs; }
+    else if (mc.rate != null && p.net > 0) { p.cogsMethod = 'rate'; p.cogs = -Math.round(mc.rate * p.net); }
+    else { p.cogsMethod = null; p.cogs = null; }
+    p.cogsRate = mc.rate;
+    p.opex = mc.opex != null && p.cogsMethod === 'actual' ? -mc.opex : null;
+    p.beforeCogs = p.adCost == null ? null : p.afterPlatform + p.adCost + p.booking;
+    p.contribution = p.beforeCogs != null && p.cogs != null ? p.beforeCogs + p.cogs : null;
+    p.afterOpex = p.contribution != null && p.opex != null ? p.contribution + p.opex : null;
+    p.base = p.gross || p.net;
+    p.refundRate = p.gross ? -p.refund / p.gross : null;
+    var r = function (x) { return p.net > 0 && x != null ? x / p.net : null; };
+    p.feeRate = r(-p.fees); p.adRate = p.adCost == null ? null : r(-(p.adCost + p.booking)); p.margin = r(p.contribution); p.marginBefore = r(p.beforeCogs);
+    p.keepRate = r(p.settlement);
+    return p;
+  }
+  M.per100 = function (p, x) { return p && p.base > 0 && x != null ? x / p.base * 100 : null; };
+  var BRIEF_FACTOR = { impr: 'Độ phủ – lượt hiển thị sản phẩm', ctr: 'Sức hút – tỷ lệ bấm vào sản phẩm', c2o: 'Chốt đơn – tỷ lệ bấm vào rồi mua', aov: 'Giá trị mỗi đơn' };
+  M.BRIEF_FACTOR = BRIEF_FACTOR;
+  M.brief = function (ctx) {
+    var cube = ctx.cube, f = ctx.f, pp = M.prevPeriod(f.from, f.to), pf = { from: pp.from, to: pp.to, shop: f.shop, ent: '' };
+    var o = { prevFrom: pp.from, prevTo: pp.to, gr: M.growth(cube, f, 20000) };
+    o.pl = plCalc(cube, f, ctx.stlr, ctx.rec.acct, ctx.ads);
+    var psr = M.settlementReport(cube, pf);
+    o.plPrev = psr.n ? plCalc(cube, pf, psr, M.reconcile(cube, pf, null).acct, M.ads(cube, pf)) : null;
+    o.ord = ctx.orders; o.ordPrev = M.orders(cube, pf);
+    var hs = (cube.health || []).filter(function (x) { return x.date <= f.to; }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    o.health = hs[0] || null; o.healthPrev = hs.filter(function (x) { return x.date <= pp.to; })[0] || null;
+    // xu hướng theo tháng trên toàn bộ dữ liệu Phân tích shop
+    var all = M.shop(cube, { from: '0000-01-01', to: '9999-12-31', shop: f.shop });
+    o.months = all.byMonth.map(function (m) {
+      var y = +m.month.substr(0, 4), mo = +m.month.substr(5, 2), len = monthEnd(y, mo);
+      return { month: m.month, gmv: m.gmv, nDays: m.nDays, gmvD: m.nDays ? m.gmv / m.nDays : null, full: m.nDays >= len, inPeriod: m.month >= f.from.substr(0, 7) && m.month <= f.to.substr(0, 7) };
+    });
+    // quy đổi phần doanh số giảm ra số video / giờ LIVE theo hiệu suất hiện tại
+    var gr = o.gr, nm = gr.norm;
+    if (gr.hasCur && gr.hasPrev && gr.gmvDelta < 0) {
+      var gap = -gr.gmvDelta;
+      o.gap = { gmv: gap, videos: nm.gmvPerView && nm.vvPerVideo ? gap / nm.gmvPerView / nm.vvPerVideo : null, hours: nm.gmvPerHour ? gap / nm.gmvPerHour : null, norm: nm };
+    }
+    o.warn = briefWarnings(ctx, o);
+    o.decisions = briefDecisions(ctx, o);
+    return o;
+  };
+  function fmtD(s) { return M.fmtDate(s); }
+  function vnMoney(x) { var a = Math.abs(x); return a >= 1e9 ? M.fmtNum(x / 1e9, 2) + ' tỷ' : a >= 1e6 ? M.fmtNum(x / 1e6, 1) + ' triệu' : M.fmtMoney(x); }
+  M.vnMoney = vnMoney;
+  function pp1(x) { return M.fmtNum(x * 100, 1) + '%'; }
+  function briefWarnings(ctx, o) {
+    var w = [], f = ctx.f, pl = o.pl, sp = ctx.shop;
+    if (!sp.n) w.push('Kỳ lọc chưa có file Phân tích shop: chưa có doanh số đặt hàng, phễu bán hàng và cơ cấu kênh.');
+    else if (sp.coverage && (sp.coverage.from > f.from || sp.coverage.to < f.to)) w.push('Phân tích shop mới có từ ' + fmtD(sp.coverage.from) + ' đến ' + fmtD(sp.coverage.to) + '.');
+    if (!pl) w.push('Kỳ lọc chưa có báo cáo quyết toán của TikTok (income_….xlsx, sheet “Báo cáo”): chưa lập được kết quả kinh doanh.');
+    else {
+      if (pl.coverage.from > f.from || pl.coverage.to < f.to) w.push('Quyết toán mới có từ ' + fmtD(pl.coverage.from) + ' đến ' + fmtD(pl.coverage.to) + '.');
+      if (pl.adSrc === 'acct' && pl.adCov && (pl.adCov.from !== pl.coverage.from || pl.adCov.to !== pl.coverage.to)) w.push('Chi phí quảng cáo tính từ ' + fmtD(pl.adCov.from) + ' đến ' + fmtD(pl.adCov.to) + ', kỳ quyết toán từ ' + fmtD(pl.coverage.from) + ' đến ' + fmtD(pl.coverage.to) + ': hai nguồn lệch ngày, tỷ lệ quảng cáo/doanh thu chỉ để tham khảo.');
+      if (pl.adSrc === 'campaign') w.push('Chưa có file Chi phí của Business Center trong kỳ: chi phí quảng cáo tạm lấy theo báo cáo chiến dịch (chưa gồm thuế, có thể thiếu tài khoản).');
+      if (!pl.adSrc) w.push('Chưa có chi phí quảng cáo trong kỳ: chưa tính được phần còn lại sau quảng cáo.');
+      if (pl.cogsMethod === 'rate') w.push('Giá vốn đang tính theo tỷ lệ ước tính ' + pp1(pl.cogsRate) + ' doanh thu thuần' + (pl.cogsMissing.length && pl.mgmt.cogs != null ? ' (giá vốn thực tế đã nhập chưa phủ đủ kỳ quyết toán)' : '') + '.');
+      if (pl.mgmt.excluded.length) w.push(pl.mgmt.excluded.length + ' khoản giá vốn/chi phí kênh chỉ trùng một phần với kỳ lọc nên không được tính.');
+    }
+    return w;
+  }
+  function briefDecisions(ctx, o) {
+    var d = [], pl = o.pl, pv = o.plPrev, gr = o.gr, h = o.health;
+    var chgTxt = function (x) { return (x >= 0 ? 'tăng ' : 'giảm ') + M.fmtNum(Math.abs(x) * 100, 1) + '%'; };
+    if (pl && pl.contribution != null && pl.contribution < 0) d.push({ k: 'bad', t: 'Lãi đóng góp của kênh âm ' + vnMoney(-pl.contribution) + ': doanh thu sau phí sàn chưa đủ bù quảng cáo và giá vốn. Cần duyệt lại ngân sách quảng cáo và giá bán trước kỳ tới.' });
+    if (gr.funnel && gr.gmvDelta < 0) {
+      var worst = gr.funnel.slice().sort(function (a, b) { return a.impact - b.impact; })[0];
+      if (worst && worst.impact < 0) {
+        var act = { impr: 'cần thêm nguồn đưa người xem tới sản phẩm: số video, giờ LIVE, nhà sáng tạo, ngân sách quảng cáo',
+          ctr: 'xem lại ảnh bìa, tiêu đề, giá hiển thị và đoạn mở đầu của video/LIVE', c2o: 'kiểm tra giá bán, khuyến mãi, đánh giá sản phẩm và tình trạng hết hàng',
+          aov: 'xem lại combo, quà tặng và ngưỡng miễn phí vận chuyển' }[worst.key];
+        var t = BRIEF_FACTOR[worst.key] + ' ' + chgTxt(worst.change) + ', làm doanh số giảm ' + vnMoney(-worst.impact) + '/ngày: ' + act + '.';
+        if (worst.key === 'impr' && o.gap && (o.gap.videos || o.gap.hours)) t += ' Phần giảm tương đương ' + (o.gap.videos ? M.fmtNum(o.gap.videos, 0) + ' video mới/ngày' : '') + (o.gap.videos && o.gap.hours ? ' hoặc ' : '') + (o.gap.hours ? M.fmtNum(o.gap.hours, 1) + ' giờ LIVE/ngày' : '') + ' theo hiệu suất hiện tại.';
+        d.push({ k: 'warn', t: t });
+      }
+    }
+    if (pl && pv) {
+      if (pl.refundRate != null && pv.refundRate != null && pl.refundRate - pv.refundRate >= 0.005) d.push({ k: 'warn', t: 'Hoàn tiền tăng từ ' + pp1(pv.refundRate) + ' lên ' + pp1(pl.refundRate) + ' tiền hàng: yêu cầu bộ phận vận hành báo cáo lý do hoàn theo nhóm sản phẩm và đơn vị vận chuyển.' });
+      if (pl.feeRate != null && pv.feeRate != null && pl.feeRate - pv.feeRate >= 0.005) {
+        var top = null;
+        Object.keys(pl.lines).forEach(function (k) { if (k === 'vat_withheld' || k === 'pit_withheld') return; var a = pv.net > 0 ? -(pv.lines[k] || 0) / pv.net : 0, b = -(pl.lines[k] || 0) / pl.net; if (!top || b - a > top.d) top = { k: k, d: b - a }; });
+        d.push({ k: 'warn', t: 'Phí sàn, khuyến mãi và hoa hồng tăng từ ' + pp1(pv.feeRate) + ' lên ' + pp1(pl.feeRate) + ' doanh thu thuần' + (top && top.d > 0 ? '; tăng nhiều nhất là ' + (M.STLR_LABEL[top.k] || top.k).toLowerCase() + ' (+' + M.fmtNum(top.d * 100, 1) + ' điểm)' : '') + '. Rà soát các chương trình đang đăng ký.' });
+      }
+      if (pl.adRate != null && pv.adRate != null && pl.adRate - pv.adRate >= 0.005 && gr.hasPrev && gr.gmvDelta < 0) d.push({ k: 'warn', t: 'Quảng cáo và booking tăng từ ' + pp1(pv.adRate) + ' lên ' + pp1(pl.adRate) + ' doanh thu thuần trong khi doanh số/ngày giảm: duyệt lại ngân sách theo hiệu quả từng tài khoản (tab Kiểm soát ads).' });
+    }
+    if (h) {
+      if (h.late != null && h.late > M.healthTargets.late) d.push({ k: 'bad', t: 'Gửi hàng muộn ' + pp1(h.late) + ' (TikTok yêu cầu ≤ 4%, ghi nhận ' + fmtD(h.date) + '): rủi ro bị giảm hiển thị. Kho cần cam kết thời gian bàn giao vận chuyển.' });
+      if (h.chat != null && h.chat < M.healthTargets.chat) d.push({ k: 'warn', t: 'Hài lòng qua chat ' + pp1(h.chat) + ' (yêu cầu ≥ 70%): bổ sung người trực chat giờ cao điểm và mẫu trả lời.' });
+      if (h.frozen > 0) d.push({ k: 'bad', t: M.fmtNum(h.frozen) + ' sản phẩm đang bị đóng băng (ghi nhận ' + fmtD(h.date) + '): xử lý vi phạm để mở lại.' });
+    }
+    if (pl && pl.cogs == null) d.push({ k: 'info', t: 'Kế toán nhập giá vốn hàng bán của kỳ ' + fmtD(pl.coverage.from) + ' – ' + fmtD(pl.coverage.to) + ' (Cài đặt → Giá vốn và chi phí kênh) để chốt lãi đóng góp.' });
+    var rank = { bad: 0, warn: 1, info: 2 };
+    return d.map(function (x, i) { x.i = i; return x; }).sort(function (a, b) { return rank[a.k] - rank[b.k] || a.i - b.i; });
+  }
+
   function shopComments(ctx, out) {
     var sp = ctx.shop;
     if (!sp || !sp.n) return;

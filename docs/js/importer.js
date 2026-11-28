@@ -354,6 +354,9 @@
   };
   function snap(r) { return { imp: r.imp, row: r.row, deact: r.deact, active: r.active, partial: r.partial, v: r.v, from: r.from, to: r.to }; }
   I.pending = function (t) { return pendings[t]; };
+  /* giải phóng bộ nhớ khi tự nhập nhiều file từ thư mục */
+  I.dropUpload = function (id) { delete uploads[id]; };
+  I.discard = function (t) { delete pendings[t]; };
 
   root.TTSI = I;
 })(typeof window !== 'undefined' ? window : self);

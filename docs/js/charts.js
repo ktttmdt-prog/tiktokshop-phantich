@@ -138,11 +138,11 @@
       var y = Y(val), h = mt + ph - y, r = Math.min(4, bw / 2, h);
       var x0 = cx - bw / 2;
       var d = 'M' + x0 + ' ' + (mt + ph) + 'V' + (y + r) + 'Q' + x0 + ' ' + y + ' ' + (x0 + r) + ' ' + y + 'H' + (x0 + bw - r) + 'Q' + (x0 + bw) + ' ' + y + ' ' + (x0 + bw) + ' ' + (y + r) + 'V' + (mt + ph) + 'Z';
-      var bar = el('path', { d: d, fill: opt.color, 'class': 'viz-bar' + (opt.flags && opt.flags[i] ? ' viz-partial' : '') }, svg);
+      var bar = el('path', { d: d, fill: opt.colors ? opt.colors[i] : opt.color, 'class': 'viz-bar' + (opt.flags && opt.flags[i] ? ' viz-partial' : '') }, svg);
       var hit = el('rect', { x: ml + band * i, y: mt, width: band, height: ph, fill: 'transparent', tabindex: -1 }, svg);
       var show = function (ev) {
         bar.classList.add('viz-hover');
-        showTip(ev.clientX, ev.clientY, opt.tipTitle ? opt.tipTitle(x) : x, [{ name: opt.name || '', color: opt.color, value: (opt.tipFmt || opt.yFmt || String)(val) }].concat(opt.extra ? opt.extra(i) : []), opt.flags && opt.flags[i] ? 'Ngày chưa kết thúc' : null);
+        showTip(ev.clientX, ev.clientY, opt.tipTitle ? opt.tipTitle(x) : x, [{ name: opt.name || '', color: opt.colors ? opt.colors[i] : opt.color, value: (opt.tipFmt || opt.yFmt || String)(val) }].concat(opt.extra ? opt.extra(i) : []), opt.flags && opt.flags[i] ? (opt.flagNote || 'Ngày chưa kết thúc') : null);
       };
       hit.addEventListener('pointermove', show); hit.addEventListener('pointerdown', show);
       hit.addEventListener('pointerleave', function () { bar.classList.remove('viz-hover'); hideTip(); });
@@ -185,7 +185,7 @@
       var lab = document.createElement('span'); lab.textContent = opt.pct(p.value / total); b.appendChild(lab);
       var show = function (ev) {
         var r = b.getBoundingClientRect();
-        showTip(ev && ev.clientX != null ? ev.clientX : r.left + r.width / 2, ev && ev.clientY != null ? ev.clientY : r.top, p.label, [{ name: 'tỷ trọng ' + opt.pct(p.value / total), color: p.color, value: opt.fmt(p.value) }]);
+        showTip(ev && ev.clientX != null ? ev.clientX : r.left + r.width / 2, ev && ev.clientY != null ? ev.clientY : r.top, p.label, [{ name: (opt.shareName || 'tỷ trọng') + ' ' + opt.pct(p.value / total), color: p.color, value: opt.fmt(p.value) }]);
       };
       b.addEventListener('pointermove', show); b.addEventListener('pointerdown', show); b.addEventListener('focus', function () { show(null); });
       b.addEventListener('pointerleave', hideTip); b.addEventListener('blur', hideTip);
@@ -200,6 +200,34 @@
       it.appendChild(document.createTextNode(p.label)); lg.appendChild(it);
     });
     host.appendChild(lg);
+  };
+
+  /* Thanh hai chiều quanh mốc 0 (tăng sang phải, giảm sang trái): items = [{label, sub, value, valueText}].
+     Hai màu đối nhau (xanh = tăng, đỏ = giảm), mốc 0 là đường xám; số in cạnh từng thanh nên không cần rê chuột mới đọc được. */
+  C.divbars = function (host, opt) {
+    host.innerHTML = '';
+    var max = 0; opt.items.forEach(function (it) { if (Math.abs(it.value || 0) > max) max = Math.abs(it.value || 0); });
+    var wrap = document.createElement('div'); wrap.className = 'divbars'; wrap.setAttribute('role', 'list');
+    if (opt.title) wrap.setAttribute('aria-label', opt.title);
+    opt.items.forEach(function (it) {
+      var v = it.value || 0, w = max > 0 ? Math.max(v ? 1.5 : 0, Math.abs(v) / max * 100) : 0;
+      var row = document.createElement('div'); row.className = 'db-row'; row.setAttribute('role', 'listitem');
+      var lab = document.createElement('div'); lab.className = 'db-label';
+      var nm = document.createElement('div'); nm.className = 'db-name'; nm.textContent = it.label; lab.appendChild(nm);
+      if (it.sub) { var sb = document.createElement('div'); sb.className = 'db-sub'; sb.textContent = it.sub; lab.appendChild(sb); }
+      var tr = document.createElement('div'); tr.className = 'db-track';
+      var L = document.createElement('div'); L.className = 'db-half db-l'; var R = document.createElement('div'); R.className = 'db-half db-r';
+      var bar = document.createElement('div'); bar.className = 'db-bar ' + (v < 0 ? 'neg' : 'pos'); bar.style.width = w + '%';
+      (v < 0 ? L : R).appendChild(bar); tr.appendChild(L); tr.appendChild(R);
+      var val = document.createElement('div'); val.className = 'db-val ' + (v < 0 ? 'neg-t' : v > 0 ? 'pos-t' : ''); val.textContent = it.valueText;
+      row.appendChild(lab); row.appendChild(tr); row.appendChild(val); wrap.appendChild(row);
+    });
+    host.appendChild(wrap);
+    if (opt.legend !== false) {
+      var lg = document.createElement('div'); lg.className = 'legend';
+      lg.innerHTML = '<span><b class="sw db-sw-neg"></b>' + (opt.negLabel || 'Làm giảm') + '</span><span><b class="sw db-sw-pos"></b>' + (opt.posLabel || 'Làm tăng') + '</span>';
+      host.appendChild(lg);
+    }
   };
 
   root.TTSC = C;
